@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Reader</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="top-bar">
+            <h1>Fast Reader</h1>
+            <button id="darkModeToggle" class="icon-button" title="Toggle Dark Mode">
+                <span class="material-icons">light_mode</span>
+            </button>
+        </div>
+        <div class="controls">
+            <div class="file-section">
+                <label for="fileInput">Choose a text file:</label>
+                <input type="file" id="fileInput" accept=".txt">
+            </div>
+            <div class="text-preview" id="textPreview">
+                <label for="textContent">Text content:</label>
+                <textarea id="textContent" readonly></textarea>
+                <div class="selection-controls">
+                    <label for="startPosition">Start from:</label>
+                    <select id="startPosition">
+                        <option value="beginning">Beginning</option>
+                        <option value="cursor">Current Selection</option>
+                    </select>
+                </div>
+            </div>
+            <div class="speed-control">
+                <label for="speedSlider">Speed (words per minute):</label>
+                <input type="range" id="speedSlider" min="60" max="600" value="200">
+                <span id="speedValue">200</span>
+            </div>
+        </div>
+        <div class="word-display">
+            <div id="currentWord">Upload a text file to begin</div>
+        </div>
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress" id="readingProgress"></div>
+            </div>
+            <div class="progress-stats">
+                <span id="wordCount">0/0 words</span>
+                <span id="timeRemaining">0:00</span>
+            </div>
+        </div>
+        <div class="playback-buttons">
+            <button id="audioToggle" class="icon-button" title="Toggle Text-to-Speech">
+                <span class="material-icons">volume_off</span>
+            </button>
+            <button id="playPauseBtn" class="icon-button" title="Play/Pause">
+                <span class="material-icons">play_arrow</span>
+            </button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
