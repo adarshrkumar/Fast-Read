@@ -21,14 +21,20 @@
                 <input type="file" id="fileInput" accept=".txt">
             </div>
             <div class="text-preview" id="textPreview">
-                <label for="textContent">Text content:</label>
-                <textarea id="textContent" readonly></textarea>
-                <div class="selection-controls">
-                    <label for="startPosition">Start from:</label>
-                    <select id="startPosition">
-                        <option value="beginning">Beginning</option>
-                        <option value="cursor">Current Selection</option>
-                    </select>
+                <label for="textContent">Text content (paste your text here or upload a file):</label>
+                <textarea id="textContent" placeholder="Paste your text here or upload a file above..."></textarea>
+                <div class="text-controls">
+                    <button id="startReadingBtn" class="start-reading-btn" disabled>
+                        <span class="material-icons">play_arrow</span>
+                        Start Reading
+                    </button>
+                    <div class="selection-controls">
+                        <label for="startPosition">Start from:</label>
+                        <select id="startPosition">
+                            <option value="beginning">Beginning</option>
+                            <option value="cursor">Current Selection</option>
+                        </select>
+                    </div>
                 </div>
             </div>
             <div class="speed-control">

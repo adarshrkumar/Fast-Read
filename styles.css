@@ -108,11 +108,52 @@ body {
     outline: none;
 }
 
+.text-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    gap: 1rem;
+}
+
 .selection-controls {
     display: flex;
     align-items: center;
     gap: 1rem;
-    margin-top: 0.5rem;
+}
+
+.start-reading-btn {
+    background-color: var(--icon-color);
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.start-reading-btn:hover:not(:disabled) {
+    background-color: #45a049;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px var(--shadow-color);
+}
+
+.start-reading-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.start-reading-btn .material-icons {
+    font-size: 1.2rem;
+    color: white;
 }
 
 #startPosition {
@@ -267,4 +308,35 @@ label {
     font-size: 0.9rem;
     color: var(--text-color);
     opacity: 0.8;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 2rem;
+        width: 98%;
+    }
+    
+    .text-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+    }
+    
+    .start-reading-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .selection-controls {
+        justify-content: center;
+    }
+    
+    #currentWord {
+        font-size: 2rem;
+    }
+    
+    .playback-buttons {
+        gap: 1rem;
+    }
 } 
