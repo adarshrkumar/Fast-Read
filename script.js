@@ -8,7 +8,6 @@ class FastReader {
         this.frequencyCache = {};
         this.isAudioEnabled = false;
         this.currentFileName = '';
-        this.loadedLibs = {};
         this.speechToken = 0;
 
         this.fileInput = document.getElementById('fileInput');
@@ -115,9 +114,7 @@ class FastReader {
             this.darkModeToggle.querySelector('.material-icons').textContent = 'dark_mode';
         }
 
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-            if (localStorage.getItem('darkMode') === null) this.toggleDarkMode(e.matches);
-        });
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => localStorage.getItem('darkMode') === null && this.toggleDarkMode(e.matches));
     }
 
     toggleDarkMode(forcedState) {
@@ -207,9 +204,7 @@ class FastReader {
             }
             this.startReading();
         }
-        else {
-            this.stopReading();
-        }
+        else this.stopReading();
 
         this.updateTextareaReadonlyState();
     }
@@ -287,7 +282,7 @@ class FastReader {
         const gap = this.textContent.value.slice(end).search(/\S/);
 
         return {
-            end: end,
+            end,
             next: gap === -1 ? -1 : end + gap,
             text: this.textContent.value.slice(offset, end).replace(/\s+/g, ' ').trim(),
             voice: (this.textContent.value.slice(0, offset).trimStart().split(/\n\s*\n/).length % 2 === 1 ? this.voice1 : this.voice2).value
@@ -451,8 +446,7 @@ class FastReader {
         this.wordCount.textContent = `${read}/${total} words`;
 
         const minutesRemaining = (total - read) / parseInt(this.speedSlider.value);
-        const minutes = Math.floor(minutesRemaining);
-        this.timeRemaining.textContent = `${minutes}:${Math.floor((minutesRemaining - minutes) * 60).toString().padStart(2, '0')}`;
+        this.timeRemaining.textContent = `${Math.floor(minutesRemaining)}:${Math.floor((minutesRemaining - Math.floor(minutesRemaining)) * 60).toString().padStart(2, '0')}`;
     }
 
     updateTextareaReadonlyState() {
@@ -468,24 +462,6 @@ class FastReader {
         }
     }
 
-    loadLib(name) {
-        if (!this.loadedLibs[name]) {
-            this.loadedLibs[name] = new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = {
-                    pdfjs: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',
-                    mammoth: 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js',
-                    jszip: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
-                    cfb: 'https://cdn.jsdelivr.net/npm/cfb@1.2.2/dist/cfb.min.js'
-                }[name];
-                script.onload = resolve;
-                script.onerror = () => reject(new Error('Could not load converter library: ' + name));
-                document.head.appendChild(script);
-            });
-        }
-        return this.loadedLibs[name];
-    }
-
     decodeBytes(bytes, label) {
         try {
             return new TextDecoder(label || 'utf-8').decode(bytes);
@@ -494,19 +470,11 @@ class FastReader {
         }
     }
 
-    collectXmlText(node, parts, blockTags) {
-        if (node.nodeType === 3) {
-            parts.push(node.nodeValue);
-            return;
-        }
-        if (node.nodeType !== 1) return;
-        if (node.localName === 'tab') parts.push('\t');
-        else if (node.localName === 'line-break' || node.localName === 'br') parts.push('\n');
-        else if (node.localName === 's') parts.push(' '.repeat(parseInt(node.getAttribute('text:c') || '1', 10)));
-        for (const child of node.childNodes) {
-            this.collectXmlText(child, parts, blockTags);
-        }
-        if (blockTags.has(node.localName)) parts.push('\n');
+    collectXmlText(node, blockTags) {
+        if (node.nodeType === 3) return node.nodeValue;
+        if (node.nodeType !== 1) return '';
+
+        return (node.localName === 's' ? ' '.repeat(parseInt(node.getAttribute('text:c') || '1', 10)) : { tab: '\t', 'line-break': '\n', br: '\n' }[node.localName] || '') + [...node.childNodes].map(child => this.collectXmlText(child, blockTags)).join('') + (blockTags.has(node.localName) ? '\n' : '');
     }
 
     async extractText(file) {
@@ -517,21 +485,15 @@ class FastReader {
         let text;
 
         if (head.startsWith('%PDF')) {
-            await this.loadLib('pdfjs');
+            if (!window.pdfjsLib) await new Promise((resolve, reject) => document.head.appendChild(Object.assign(document.createElement('script'), { src: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', onload: resolve, onerror: () => reject(new Error('Could not load converter library: pdfjs')) })));
             window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
             const pdf = await window.pdfjsLib.getDocument({ data: bytes }).promise;
-            const pages = [];
-            for (let p = 1; p <= pdf.numPages; p++) {
-                let line = '';
-                for (const item of (await (await pdf.getPage(p)).getTextContent()).items) line += item.str + (item.hasEOL ? '\n' : ' ');
-                pages.push(line);
-            }
-            text = pages.join('\n');
+            text = (await Promise.all(Array.from({ length: pdf.numPages }, async (_, index) => (await (await pdf.getPage(index + 1)).getTextContent()).items.map(item => item.str + (item.hasEOL ? '\n' : ' ')).join('')))).join('\n');
         }
         else if (head.startsWith('{\\rtf')) {
             const src = this.decodeBytes(bytes, 'windows-1252');
-            const out = [];
-            const stack = [];
+            let out = '';
+            let stack = [];
             let skip = false;
             let uc = 1;
             let skipChars = 0;
@@ -539,16 +501,17 @@ class FastReader {
 
             while (i < src.length) {
                 if (src[i] === '{') {
-                    stack.push({ skip: skip, uc: uc });
+                    stack = [{ skip: skip, uc: uc }, ...stack];
                     i++;
                     if (src[i] === '\\' && src[i + 1] === '*') skip = true;
                     else if (src[i] === '\\') {
-                        const m = /^\\([a-zA-Z]+)/.exec(src.slice(i, i + 32));
-                        if (m && new Set(['fonttbl', 'colortbl', 'stylesheet', 'info', 'pict', 'object', 'header', 'footer', 'headerl', 'headerr', 'headerf', 'footerl', 'footerr', 'footerf', 'footnote', 'themedata', 'colorschememapping', 'latentstyles', 'datastore', 'xmlnstbl', 'listtable', 'listoverridetable', 'rsidtbl', 'generator', 'fldinst', 'private', 'revtbl', 'pgptbl', 'mmathPr', 'wgrffmtfilter', 'bkmkstart', 'bkmkend']).has(m[1])) skip = true;
+                        const destination = /^\\([a-zA-Z]+)/.exec(src.slice(i, i + 32));
+                        if (destination && new Set(['fonttbl', 'colortbl', 'stylesheet', 'info', 'pict', 'object', 'header', 'footer', 'headerl', 'headerr', 'headerf', 'footerl', 'footerr', 'footerf', 'footnote', 'themedata', 'colorschememapping', 'latentstyles', 'datastore', 'xmlnstbl', 'listtable', 'listoverridetable', 'rsidtbl', 'generator', 'fldinst', 'private', 'revtbl', 'pgptbl', 'mmathPr', 'wgrffmtfilter', 'bkmkstart', 'bkmkend']).has(destination[1])) skip = true;
                     }
                 }
                 else if (src[i] === '}') {
-                    const state = stack.pop();
+                    const [state, ...rest] = stack;
+                    stack = rest;
                     if (state) {
                         skip = state.skip;
                         uc = state.uc;
@@ -560,55 +523,55 @@ class FastReader {
                     if (src[i + 1] === '\\' || src[i + 1] === '{' || src[i + 1] === '}') {
                         if (!skip) {
                             if (skipChars > 0) skipChars--;
-                            else out.push(src[i + 1]);
+                            else out += src[i + 1];
                         }
                         i += 2;
                     }
                     else if (src[i + 1] === "'") {
                         if (!skip) {
                             if (skipChars > 0) skipChars--;
-                            else out.push(new TextDecoder('windows-1252').decode(new Uint8Array([parseInt(src.slice(i + 2, i + 4), 16) || 63])));
+                            else out += new TextDecoder('windows-1252').decode(new Uint8Array([parseInt(src.slice(i + 2, i + 4), 16) || 63]));
                         }
                         i += 4;
                     }
                     else if (src[i + 1] === '~') {
-                        if (!skip) out.push(' ');
+                        if (!skip) out += '\xA0';
                         i += 2;
                     }
                     else if (src[i + 1] === '_') {
-                        if (!skip) out.push('-');
+                        if (!skip) out += '-';
                         i += 2;
                     }
                     else if (src[i + 1] === '-' || src[i + 1] === '*' || src[i + 1] === ':' || src[i + 1] === '|') {
                         i += 2;
                     }
                     else if (src[i + 1] === '\n' || src[i + 1] === '\r') {
-                        if (!skip) out.push('\n');
+                        if (!skip) out += '\n';
                         i += 2;
                     }
                     else {
-                        const m = /^\\([a-zA-Z]+)(-?\d+)? ?/.exec(src.slice(i, i + 40));
-                        if (!m) {
+                        const controlWord = /^\\([a-zA-Z]+)(-?\d+)? ?/.exec(src.slice(i, i + 40));
+                        if (!controlWord) {
                             i += 2;
                             continue;
                         }
-                        i += m[0].length;
-                        const param = m[2] !== undefined ? parseInt(m[2], 10) : undefined;
+                        i += controlWord[0].length;
+                        const param = controlWord[2] !== undefined ? parseInt(controlWord[2], 10) : undefined;
                         if (skip) continue;
-                        switch (m[1]) {
-                            case 'par': case 'line': case 'sect': case 'page': case 'row': out.push('\n'); break;
-                            case 'tab': case 'cell': out.push('\t'); break;
-                            case 'emdash': out.push('—'); break;
-                            case 'endash': out.push('–'); break;
-                            case 'lquote': out.push('‘'); break;
-                            case 'rquote': out.push('’'); break;
-                            case 'ldblquote': out.push('“'); break;
-                            case 'rdblquote': out.push('”'); break;
-                            case 'bullet': out.push('•'); break;
+                        switch (controlWord[1]) {
+                            case 'par': case 'line': case 'sect': case 'page': case 'row': out += '\n'; break;
+                            case 'tab': case 'cell': out += '\t'; break;
+                            case 'emdash': out += '—'; break;
+                            case 'endash': out += '–'; break;
+                            case 'lquote': out += '‘'; break;
+                            case 'rquote': out += '’'; break;
+                            case 'ldblquote': out += '“'; break;
+                            case 'rdblquote': out += '”'; break;
+                            case 'bullet': out += '•'; break;
                             case 'uc': if (param !== undefined) uc = param; break;
                             case 'u':
                                 if (param !== undefined) {
-                                    out.push(String.fromCharCode(param < 0 ? param + 65536 : param));
+                                    out += String.fromCharCode(param < 0 ? param + 65536 : param);
                                     skipChars = uc;
                                 }
                                 break;
@@ -619,29 +582,27 @@ class FastReader {
                 else {
                     if (!skip) {
                         if (skipChars > 0) skipChars--;
-                        else out.push(src[i]);
+                        else out += src[i];
                     }
                     i++;
                 }
             }
-            text = out.join('');
+            text = out;
         }
         else if (bytes[0] === 0x50 && bytes[1] === 0x4B) {
-            await this.loadLib('jszip');
+            if (!window.JSZip) await new Promise((resolve, reject) => document.head.appendChild(Object.assign(document.createElement('script'), { src: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js', onload: resolve, onerror: () => reject(new Error('Could not load converter library: jszip')) })));
             const zip = await window.JSZip.loadAsync(buf);
             if (zip.file('content.xml') && zip.file('mimetype')) {
-                const parts = [];
-                this.collectXmlText(new DOMParser().parseFromString(await zip.file('content.xml').async('string'), 'application/xml').documentElement, parts, new Set(['p', 'h', 'list-item', 'table-row']));
-                text = parts.join('');
+                text = this.collectXmlText(new DOMParser().parseFromString(await zip.file('content.xml').async('string'), 'application/xml').documentElement, new Set(['p', 'h', 'list-item', 'table-row']));
             }
             else if (zip.file('word/document.xml')) {
-                await this.loadLib('mammoth');
+                if (!window.mammoth) await new Promise((resolve, reject) => document.head.appendChild(Object.assign(document.createElement('script'), { src: 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js', onload: resolve, onerror: () => reject(new Error('Could not load converter library: mammoth')) })));
                 text = (await window.mammoth.extractRawText({ arrayBuffer: buf })).value;
             }
             else throw new Error('Unsupported file format: ' + file.name);
         }
         else if (bytes[0] === 0xD0 && bytes[1] === 0xCF && bytes[2] === 0x11 && bytes[3] === 0xE0) {
-            await this.loadLib('cfb');
+            if (!window.CFB) await new Promise((resolve, reject) => document.head.appendChild(Object.assign(document.createElement('script'), { src: 'https://cdn.jsdelivr.net/npm/cfb@1.2.2/dist/cfb.min.js', onload: resolve, onerror: () => reject(new Error('Could not load converter library: cfb')) })));
             const container = window.CFB.read(bytes, { type: 'array' });
             const wordEntry = window.CFB.find(container, 'WordDocument');
             if (!wordEntry) throw new Error('Not a valid Word .doc file');
@@ -661,8 +622,7 @@ class FastReader {
                 if (tbl[p] !== 0x02) throw new Error('No piece table');
                 const pieces = (tdv.getUint32(p + 1, true) - 4) / 12;
                 p += 5;
-                const cps = [];
-                for (let k = 0; k <= pieces; k++) cps.push(tdv.getUint32(p + k * 4, true));
+                const cps = Array.from({ length: pieces + 1 }, (_, k) => tdv.getUint32(p + k * 4, true));
                 for (let k = 0; k < pieces; k++) {
                     const fcRaw = tdv.getUint32(p + (pieces + 1) * 4 + k * 8 + 2, true);
                     const fc = fcRaw & 0x3FFFFFFF;
@@ -694,23 +654,8 @@ class FastReader {
         const kept = lines.filter((line, index) => line.length > 100 || counts.get(keys[index]) < 3 || !/^#$|^# | #$/.test(keys[index]));
         const sorted = kept.filter(line => line).map(line => line.length).sort((a, b) => a - b);
         const terminal = /[.!?…:]["')\]]*$/;
-        const shortLine = line => terminal.test(line) ? line.length < sorted[Math.floor(sorted.length * 0.9)] * 0.85 : line.length < sorted[Math.floor(sorted.length * 0.9)] * 0.5;
-        const flow = [];
-        const captions = [];
-        let cursor = 0;
-        while (cursor < kept.length) {
-            if (/^(Figure|Table) \d/.test(kept[cursor]) && shortLine(kept[cursor]) && flow[flow.length - 1] && !terminal.test(flow[flow.length - 1])) {
-                const block = [kept[cursor++]];
-                while (kept[cursor] && shortLine(kept[cursor]) && !terminal.test(kept[cursor])) block.push(kept[cursor++]);
-                captions.push(block.join(' '));
-            }
-            else {
-                flow.push(kept[cursor]);
-                if (terminal.test(kept[cursor++]) && captions.length) flow.push('', ...captions.splice(0).flatMap(caption => [caption, '']));
-            }
-        }
-        flow.push('', ...captions);
-        text = flow.map((line, index) => shortLine(line) && (terminal.test(line) || terminal.test(flow[index + 1] || '') || !shortLine(flow[index + 1] || '')) ? line + '\n' : line).join('\n').replace(/\n(?=•)/g, '\n\n');
+        const flow = kept.reduce(([out, pending, open, previous], line) => open && line && line.length < sorted[Math.floor(sorted.length * 0.9)] * 0.5 && !terminal.test(line) ? [out, pending + ' ' + line, true, previous] : /^(Figure|Table) \d/.test(line) && line.length < sorted[Math.floor(sorted.length * 0.9)] * 0.5 && !terminal.test(line) && previous && !terminal.test(previous) ? [out, pending + '\n\n' + line, true, previous] : [out + line + '\n' + (terminal.test(line) && pending ? pending + '\n\n' : ''), terminal.test(line) ? '' : pending, false, line], ['', '', false, '']).slice(0, 2).join('').split('\n');
+        text = flow.map((line, index) => line.length < sorted[Math.floor(sorted.length * 0.9)] * (terminal.test(line) ? 0.85 : 0.5) && (terminal.test(line) || terminal.test(flow[index + 1] || '') || (flow[index + 1] || '').length >= sorted[Math.floor(sorted.length * 0.9)] * 0.5) ? line + '\n' : line).join('\n').replace(/\n(?=[•◦▪▫●○■□‣⁃∙·])/g, '\n\n');
 
         const hyphenated = /(\p{L}+)[ \t]*([-‐-–])[ \t]*\r?\n(\p{L}+)/gu;
         const forms = [...new Set(Array.from(text.matchAll(hyphenated), match => [match[1] + match[3], match[1] + '-' + match[3], match[1], match[3]]).flat())];
