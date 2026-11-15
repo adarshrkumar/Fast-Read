@@ -1,7 +1,6 @@
 let isPlaying = false;
 let intervalId = null;
 const audio = new Audio();
-let ttsModule = null;
 let prefetch = null;
 const frequencyCache = {};
 let isAudioEnabled = false;
@@ -43,26 +42,16 @@ playPauseBtn.disabled = true;
 audioToggle.disabled = true;
 downloadAudioBtn.disabled = true;
 
-loadSavedStates();
+const savedSettings = JSON.parse(localStorage.getItem('fastReaderSettings') || '{}');
 
-function loadSavedStates() {
-    const savedSettings = JSON.parse(localStorage.getItem('fastReaderSettings') || '{}');
+if (savedSettings.speed) {
+    speedSlider.value = savedSettings.speed;
+    speedValue.textContent = savedSettings.speed;
+}
 
-    if (savedSettings.speed) {
-        speedSlider.value = savedSettings.speed;
-        speedValue.textContent = savedSettings.speed;
-    }
-
-    if (savedSettings.isAudioEnabled !== undefined) {
-        isAudioEnabled = savedSettings.isAudioEnabled;
-        audioToggle.querySelector('.material-icons').textContent = isAudioEnabled ? 'volume_up' : 'volume_off';
-    }
-
-    initializeDarkMode();
-    populateVoices();
-
-    const lastFile = localStorage.getItem('fastReaderLastFile');
-    if (lastFile) restoreFileState(JSON.parse(lastFile));
+if (savedSettings.isAudioEnabled !== undefined) {
+    isAudioEnabled = savedSettings.isAudioEnabled;
+    audioToggle.querySelector('.material-icons').textContent = isAudioEnabled ? 'volume_up' : 'volume_off';
 }
 
 function saveSettings() {
@@ -86,10 +75,12 @@ function saveFileState() {
     }));
 }
 
-function restoreFileState(fileData) {
-    currentFileName = fileData.name;
-    textContent.value = fileData.text;
-    textContent.setSelectionRange(fileData.selectionStart || 0, fileData.selectionStart || 0);
+const lastFile = JSON.parse(localStorage.getItem('fastReaderLastFile') || 'null');
+
+if (lastFile) {
+    currentFileName = lastFile.name;
+    textContent.value = lastFile.text;
+    textContent.setSelectionRange(lastFile.selectionStart || 0, lastFile.selectionStart || 0);
     updateDisplay();
     updateProgress();
     playPauseBtn.disabled = false;
@@ -103,16 +94,14 @@ function restoreFileState(fileData) {
     updateTextareaReadonlyState();
 }
 
-function initializeDarkMode() {
-    const savedMode = localStorage.getItem('darkMode');
+const savedMode = localStorage.getItem('darkMode');
 
-    if (savedMode === 'true' || savedMode === null && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.body.classList.add('dark-mode');
-        darkModeToggle.querySelector('.material-icons').textContent = 'dark_mode';
-    }
-
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => localStorage.getItem('darkMode') === null && toggleDarkMode(e.matches));
+if (savedMode === 'true' || savedMode === null && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.body.classList.add('dark-mode');
+    darkModeToggle.querySelector('.material-icons').textContent = 'dark_mode';
 }
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => localStorage.getItem('darkMode') === null && toggleDarkMode(e.matches));
 
 function toggleDarkMode(forcedState) {
     document.body.classList.toggle('dark-mode', forcedState);
@@ -146,7 +135,7 @@ async function handleFileUpload(event) {
         updateTextareaReadonlyState();
     } catch (error) {
         console.error('Error reading file:', error);
-        currentWordDisplay.textContent = 'Error reading file: ' + (error.message || 'unknown error');
+        currentWordDisplay.textContent = `Error reading file: ${error.message || 'unknown error'}`;
     }
 }
 
@@ -255,13 +244,6 @@ function updateSpeed() {
     saveSettings();
 }
 
-function loadTts() {
-    return ttsModule ||= import('https://esm.sh/@diffusionstudio/vits-web@1.0.3').catch(error => {
-        ttsModule = null;
-        throw error;
-    });
-}
-
 async function lookupFrequency(word) {
     if (word in frequencyCache) return;
 
@@ -287,7 +269,7 @@ function getParagraph(offset) {
 }
 
 function synthesize(paragraph, onProgress) {
-    return loadTts().then(tts => tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress));
+    return window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress);
 }
 
 async function speakFrom(offset) {
@@ -313,7 +295,7 @@ async function speakFrom(offset) {
     } catch (error) {
         if (token !== speechToken) return;
         console.error('Error generating audio:', error);
-        currentWordDisplay.textContent = 'Error generating audio: ' + (error.message || 'unknown error');
+        currentWordDisplay.textContent = `Error generating audio: ${error.message || 'unknown error'}`;
         togglePlayPause();
     }
 }
@@ -336,9 +318,9 @@ function handleSpeechEnd(token, paragraph) {
     speakFrom(paragraph.next);
 }
 
-async function populateVoices() {
+(async () => {
     try {
-        const voices = await (await loadTts()).voices();
+        const voices = await window.tts.voices();
 
         for (const [index, select] of [voice1, voice2].entries()) {
             select.replaceChildren();
@@ -348,13 +330,13 @@ async function populateVoices() {
                 option.textContent = `${voice.language.name_english} (${voice.language.country_english}) - ${voice.name} (${voice.quality})`;
                 select.appendChild(option);
             }
-            select.value = JSON.parse(localStorage.getItem('fastReaderSettings') || '{}')['voice' + (index + 1)] || ['en_US-hfc_female-medium', 'en_US-hfc_male-medium'][index];
+            select.value = savedSettings[`voice${index + 1}`] || ['en_US-hfc_female-medium', 'en_US-hfc_male-medium'][index];
             if (!select.value) select.value = voices[Math.min(index, voices.length - 1)].key;
         }
     } catch (error) {
         console.error('Error loading voices:', error);
     }
-}
+})();
 
 async function downloadAudio() {
     if (!/\S/.test(textContent.value)) return;
@@ -406,13 +388,13 @@ async function downloadAudio() {
 
         const link = document.createElement('a');
         link.href = URL.createObjectURL(new Blob([view], { type: 'audio/wav' }));
-        link.download = (currentFileName.replace(/\.[^.]+$/, '') || 'read-aloud') + '.wav';
+        link.download = `${currentFileName.replace(/\.[^.]+$/, '') || 'read-aloud'}.wav`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 60000);
         generationStatus.textContent = 'Done. Download started.';
     } catch (error) {
         console.error('Error generating audio:', error);
-        generationStatus.textContent = 'Error generating audio: ' + (error.message || 'unknown error');
+        generationStatus.textContent = `Error generating audio: ${error.message || 'unknown error'}`;
     } finally {
         downloadAudioBtn.disabled = false;
     }
@@ -471,7 +453,7 @@ function collectXmlText(node, blockTags) {
     if (node.nodeType === 3) return node.nodeValue;
     if (node.nodeType !== 1) return '';
 
-    return (node.localName === 's' ? ' '.repeat(parseInt(node.getAttribute('text:c') || '1', 10)) : { tab: '\t', 'line-break': '\n', br: '\n' }[node.localName] || '') + [...node.childNodes].map(child => collectXmlText(child, blockTags)).join('') + (blockTags.has(node.localName) ? '\n' : '');
+    return `${node.localName === 's' ? ' '.repeat(parseInt(node.getAttribute('text:c') || '1', 10)) : { tab: '\t', 'line-break': '\n', br: '\n' }[node.localName] || ''}${[...node.childNodes].map(child => collectXmlText(child, blockTags)).join('')}${blockTags.has(node.localName) ? '\n' : ''}`;
 }
 
 async function extractText(file) {
@@ -482,10 +464,9 @@ async function extractText(file) {
     let text;
 
     if (head.startsWith('%PDF')) {
-        if (!window.pdfjsLib) await new Promise((resolve, reject) => document.head.appendChild(Object.assign(document.createElement('script'), { src: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js', onload: resolve, onerror: () => reject(new Error('Could not load converter library: pdfjs')) })));
         window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
         const pdf = await window.pdfjsLib.getDocument({ data: bytes }).promise;
-        text = (await Promise.all(Array.from({ length: pdf.numPages }, async (_, index) => (await (await pdf.getPage(index + 1)).getTextContent()).items.map(item => item.str + (item.hasEOL ? '\n' : ' ')).join('')))).join('\n');
+        text = (await Promise.all(Array.from({ length: pdf.numPages }, async (_, index) => (await (await pdf.getPage(index + 1)).getTextContent()).items.map(item => `${item.str}${item.hasEOL ? '\n' : ' '}`).join('')))).join('\n');
     }
     else if (head.startsWith('{\\rtf')) {
         const src = decodeBytes(bytes, 'windows-1252');
@@ -587,19 +568,16 @@ async function extractText(file) {
         text = out;
     }
     else if (bytes[0] === 0x50 && bytes[1] === 0x4B) {
-        if (!window.JSZip) await new Promise((resolve, reject) => document.head.appendChild(Object.assign(document.createElement('script'), { src: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js', onload: resolve, onerror: () => reject(new Error('Could not load converter library: jszip')) })));
         const zip = await window.JSZip.loadAsync(buf);
         if (zip.file('content.xml') && zip.file('mimetype')) {
             text = collectXmlText(new DOMParser().parseFromString(await zip.file('content.xml').async('string'), 'application/xml').documentElement, new Set(['p', 'h', 'list-item', 'table-row']));
         }
         else if (zip.file('word/document.xml')) {
-            if (!window.mammoth) await new Promise((resolve, reject) => document.head.appendChild(Object.assign(document.createElement('script'), { src: 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js', onload: resolve, onerror: () => reject(new Error('Could not load converter library: mammoth')) })));
             text = (await window.mammoth.extractRawText({ arrayBuffer: buf })).value;
         }
-        else throw new Error('Unsupported file format: ' + file.name);
+        else throw new Error(`Unsupported file format: ${file.name}`);
     }
     else if (bytes[0] === 0xD0 && bytes[1] === 0xCF && bytes[2] === 0x11 && bytes[3] === 0xE0) {
-        if (!window.CFB) await new Promise((resolve, reject) => document.head.appendChild(Object.assign(document.createElement('script'), { src: 'https://cdn.jsdelivr.net/npm/cfb@1.2.2/dist/cfb.min.js', onload: resolve, onerror: () => reject(new Error('Could not load converter library: cfb')) })));
         const container = window.CFB.read(bytes, { type: 'array' });
         const wordEntry = window.CFB.find(container, 'WordDocument');
         if (!wordEntry) throw new Error('Not a valid Word .doc file');
@@ -641,7 +619,7 @@ async function extractText(file) {
         text = decodeBytes(bytes.subarray(0x80, Math.max(0x80, Math.min(new DataView(buf).getUint32(0x0E, true) || buf.byteLength, buf.byteLength))), 'windows-1252').replace(/\u000C/g, '\n');
     }
     else if (ext === 'rtfd') throw new Error('RTFD is a folder bundle. Choose the TXT.rtf file inside it.');
-    else if (['pdf', 'doc', 'docx', 'odt'].includes(ext)) throw new Error('Could not read this ' + ext.toUpperCase() + ' file.');
+    else if (['pdf', 'doc', 'docx', 'odt'].includes(ext)) throw new Error(`Could not read this ${ext.toUpperCase()} file.`);
     else text = decodeBytes(bytes);
 
     const lines = text.replace(/\r\n?/g, '\n').replace(/\xAD[ \t]*\n?/g, '').split('\n').map(line => line.replace(/[ \t\xA0]+/g, ' ').replace(/ ! /g, ' ').replace(/ +([,.;:!?)\]])/g, '$1').replace(/([(\[“]) +/g, '$1').trim().replace(/[‘’‚‛]/g, "'").replace(/[“”„‟]/g, '"'));
@@ -651,13 +629,13 @@ async function extractText(file) {
     const kept = lines.filter((line, index) => line.length > 100 || counts.get(keys[index]) < 3 || !/^#$|^# | #$/.test(keys[index]));
     const sorted = kept.filter(line => line).map(line => line.length).sort((a, b) => a - b);
     const terminal = /[.!?…:]["')\]]*$/;
-    const flow = kept.reduce(([out, pending, open, previous], line) => open && line && line.length < sorted[Math.floor(sorted.length * 0.9)] * 0.5 && !terminal.test(line) ? [out, pending + ' ' + line, true, previous] : /^(Figure|Table) \d/.test(line) && line.length < sorted[Math.floor(sorted.length * 0.9)] * 0.5 && !terminal.test(line) && previous && !terminal.test(previous) ? [out, pending + '\n\n' + line, true, previous] : [out + line + '\n' + (terminal.test(line) && pending ? pending + '\n\n' : ''), terminal.test(line) ? '' : pending, false, line], ['', '', false, '']).slice(0, 2).join('').split('\n');
-    text = flow.map((line, index) => line.length < sorted[Math.floor(sorted.length * 0.9)] * (terminal.test(line) ? 0.85 : 0.5) && (terminal.test(line) || terminal.test(flow[index + 1] || '') || (flow[index + 1] || '').length >= sorted[Math.floor(sorted.length * 0.9)] * 0.5) ? line + '\n' : line).join('\n').replace(/\n(?=[•◦▪▫●○■□‣⁃∙·])/g, '\n\n');
+    const flow = kept.reduce(([out, pending, open, previous], line) => open && line && line.length < sorted[Math.floor(sorted.length * 0.9)] * 0.5 && !terminal.test(line) ? [out, `${pending} ${line}`, true, previous] : /^(Figure|Table) \d/.test(line) && line.length < sorted[Math.floor(sorted.length * 0.9)] * 0.5 && !terminal.test(line) && previous && !terminal.test(previous) ? [out, `${pending}\n\n${line}`, true, previous] : [`${out}${line}\n${terminal.test(line) && pending ? `${pending}\n\n` : ''}`, terminal.test(line) ? '' : pending, false, line], ['', '', false, '']).slice(0, 2).join('').split('\n');
+    text = flow.map((line, index) => line.length < sorted[Math.floor(sorted.length * 0.9)] * (terminal.test(line) ? 0.85 : 0.5) && (terminal.test(line) || terminal.test(flow[index + 1] || '') || (flow[index + 1] || '').length >= sorted[Math.floor(sorted.length * 0.9)] * 0.5) ? `${line}\n` : line).join('\n').replace(/\n(?=[•◦▪▫●○■□‣⁃∙·])/g, '\n\n');
 
     const hyphenated = /(\p{L}+)[ \t]*([-‐-–])[ \t]*\r?\n(\p{L}+)/gu;
-    const forms = [...new Set(Array.from(text.matchAll(hyphenated), match => [match[1] + match[3], match[1] + '-' + match[3], match[1], match[3]]).flat())];
+    const forms = [...new Set(Array.from(text.matchAll(hyphenated), match => [`${match[1]}${match[3]}`, `${match[1]}-${match[3]}`, match[1], match[3]]).flat())];
     for (let index = 0; index < forms.length; index += 10) await Promise.all(forms.slice(index, index + 10).map(form => lookupFrequency(form)));
-    text = text.replace(hyphenated, (_, first, dash, second) => frequencyCache[first + '-' + second] > frequencyCache[first + second] || frequencyCache[first + '-' + second] === frequencyCache[first + second] && (frequencyCache[first] >= 1 || /^\p{Lu}+$/u.test(first)) && frequencyCache[second] >= 1 ? first + dash + second : first + second);
+    text = text.replace(hyphenated, (_, first, dash, second) => frequencyCache[`${first}-${second}`] > frequencyCache[`${first}${second}`] || frequencyCache[`${first}-${second}`] === frequencyCache[`${first}${second}`] && (frequencyCache[first] >= 1 || /^\p{Lu}+$/u.test(first)) && frequencyCache[second] >= 1 ? `${first}${dash}${second}` : `${first}${second}`);
 
     text = text.replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/\n{3,}/g, '\n\n').replace(/([-‐-―])\n(?=[^\n])/g, '$1').replace(/(?<![.!?…:]["')\]]*)\n\n(?=\p{Ll})/gu, ' ').replace(/(?<!(?:[.!?…:]["')\]]*|\n))\n(?!\n)/g, ' ').trim();
 

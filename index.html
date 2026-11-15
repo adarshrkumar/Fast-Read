@@ -77,6 +77,14 @@
             </button>
         </div>
     </div>
-    <script src="script.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/cfb@1.2.2/dist/cfb.min.js"></script>
+    <script type="module">
+        import * as tts from 'https://esm.sh/@diffusionstudio/vits-web@1.0.3';
+        window.tts = tts;
+    </script>
+    <script defer src="script.js"></script>
 </body>
 </html> 
