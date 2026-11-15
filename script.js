@@ -5,6 +5,7 @@ class FastReader {
         this.audio = new Audio();
         this.ttsModule = null;
         this.prefetch = null;
+        this.frequencyCache = {};
         this.isAudioEnabled = false;
         this.currentFileName = '';
         this.loadedLibs = {};
@@ -267,6 +268,17 @@ class FastReader {
             this.ttsModule = null;
             throw error;
         });
+    }
+
+    async lookupFrequency(word) {
+        if (word in this.frequencyCache) return;
+
+        try {
+            const [entry] = await (await fetch(`https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&md=f&max=1`)).json();
+            this.frequencyCache[word] = entry && entry.word.toLowerCase() === word.toLowerCase() ? parseFloat((entry.tags?.find(tag => tag.startsWith('f:')) || 'f:0').slice(2)) : 0;
+        } catch (error) {
+            this.frequencyCache[word] = 0;
+        }
     }
 
     getParagraph(offset) {
@@ -673,6 +685,11 @@ class FastReader {
         else if (ext === 'rtfd') throw new Error('RTFD is a folder bundle. Choose the TXT.rtf file inside it.');
         else if (['pdf', 'doc', 'docx', 'odt'].includes(ext)) throw new Error('Could not read this ' + ext.toUpperCase() + ' file.');
         else text = this.decodeBytes(bytes);
+
+        const hyphenated = /(\p{L}+)-[ \t]*\n(\p{L}+)/gu;
+        const forms = [...new Set(Array.from(text.matchAll(hyphenated), match => [match[1] + match[2], match[1] + '-' + match[2]]).flat())];
+        for (let index = 0; index < forms.length; index += 10) await Promise.all(forms.slice(index, index + 10).map(form => this.lookupFrequency(form)));
+        text = text.replace(hyphenated, (_, first, second) => this.frequencyCache[first + second] > this.frequencyCache[first + '-' + second] ? first + second : first + '-' + second);
 
         return text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/(?<!(?:[.!?…]["'”’)\]]*|\n))\n(?!\n)/g, ' ').trim();
     }
