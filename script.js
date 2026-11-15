@@ -7,25 +7,16 @@ let isAudioEnabled = false;
 let currentFileName = '';
 let speechToken = 0;
 
-const fileInput = document.getElementById('fileInput');
-const playPauseBtn = document.getElementById('playPauseBtn');
-const speedSlider = document.getElementById('speedSlider');
 const speedValue = document.getElementById('speedValue');
 const currentWordDisplay = document.getElementById('currentWord');
-const audioToggle = document.getElementById('audioToggle');
-const darkModeToggle = document.getElementById('darkModeToggle');
-const textContent = document.getElementById('textContent');
 const progressBar = document.getElementById('readingProgress');
 const wordCount = document.getElementById('wordCount');
 const timeRemaining = document.getElementById('timeRemaining');
-const startReadingBtn = document.getElementById('startReadingBtn');
-const voice1 = document.getElementById('voice1');
-const voice2 = document.getElementById('voice2');
-const downloadAudioBtn = document.getElementById('downloadAudioBtn');
 const generationContainer = document.getElementById('generationContainer');
 const generationProgress = document.getElementById('generationProgress');
 const generationStatus = document.getElementById('generationStatus');
 
+const fileInput = document.getElementById('fileInput');
 fileInput.addEventListener('change', async event => {
     if (!event.target.files[0]) return;
 
@@ -246,7 +237,11 @@ fileInput.addEventListener('change', async event => {
         currentWordDisplay.textContent = `Error reading file: ${error.message || 'unknown error'}`;
     }
 });
+
+const playPauseBtn = document.getElementById('playPauseBtn');
 playPauseBtn.addEventListener('click', togglePlayPause);
+
+const speedSlider = document.getElementById('speedSlider');
 speedSlider.addEventListener('input', () => {
     speedValue.textContent = speedSlider.value;
     audio.playbackRate = parseInt(speedSlider.value) / 200;
@@ -256,6 +251,8 @@ speedSlider.addEventListener('input', () => {
     }
     saveSettings();
 });
+
+const audioToggle = document.getElementById('audioToggle');
 audioToggle.addEventListener('click', () => {
     isAudioEnabled = !isAudioEnabled;
     audioToggle.querySelector('.material-icons').textContent = isAudioEnabled ? 'volume_up' : 'volume_off';
@@ -266,7 +263,11 @@ audioToggle.addEventListener('click', () => {
     }
     saveSettings();
 });
+
+const darkModeToggle = document.getElementById('darkModeToggle');
 darkModeToggle.addEventListener('click', () => toggleDarkMode());
+
+const textContent = document.getElementById('textContent');
 textContent.addEventListener('click', () => {
     updateDisplay();
     updateProgress();
@@ -281,6 +282,8 @@ textContent.addEventListener('input', () => {
 
     updateTextareaReadonlyState();
 });
+
+const startReadingBtn = document.getElementById('startReadingBtn');
 startReadingBtn.addEventListener('click', () => {
     if (!textContent.value.trim()) return;
 
@@ -300,8 +303,14 @@ startReadingBtn.addEventListener('click', () => {
     }
     else togglePlayPause();
 });
+
+const voice1 = document.getElementById('voice1');
 voice1.addEventListener('change', saveSettings);
+
+const voice2 = document.getElementById('voice2');
 voice2.addEventListener('change', saveSettings);
+
+const downloadAudioBtn = document.getElementById('downloadAudioBtn');
 downloadAudioBtn.addEventListener('click', async () => {
     if (!/\S/.test(textContent.value)) return;
 
