@@ -687,22 +687,37 @@ class FastReader {
         else if (['pdf', 'doc', 'docx', 'odt'].includes(ext)) throw new Error('Could not read this ' + ext.toUpperCase() + ' file.');
         else text = this.decodeBytes(bytes);
 
-        const lines = text.replace(/\r\n?/g, '\n').replace(/\xAD[ \t]*\n?/g, '').split('\n').map(line => line.replace(/[ \t\xA0]+/g, ' ').replace(/ ! /g, ' ').replace(/ +([,.;:!?)\]])/g, '$1').replace(/([(\[“]) +/g, '$1').trim());
+        const lines = text.replace(/\r\n?/g, '\n').replace(/\xAD[ \t]*\n?/g, '').split('\n').map(line => line.replace(/[ \t\xA0]+/g, ' ').replace(/ ! /g, ' ').replace(/ +([,.;:!?)\]])/g, '$1').replace(/([(\[“]) +/g, '$1').trim().replace(/[‘’‚‛]/g, "'").replace(/[“”„‟]/g, '"'));
         const keys = lines.map(line => line.replace(/\d+/g, '#'));
         const counts = new Map();
         for (const key of keys) counts.set(key, (counts.get(key) || 0) + 1);
         const kept = lines.filter((line, index) => line.length > 100 || counts.get(keys[index]) < 3 || !/^#$|^# | #$/.test(keys[index]));
         const sorted = kept.filter(line => line).map(line => line.length).sort((a, b) => a - b);
-        const terminal = /[.!?…:]["'”’)\]]*$/;
+        const terminal = /[.!?…:]["')\]]*$/;
         const shortLine = line => terminal.test(line) ? line.length < sorted[Math.floor(sorted.length * 0.9)] * 0.85 : line.length < sorted[Math.floor(sorted.length * 0.9)] * 0.5;
-        text = kept.map((line, index) => shortLine(line) && (terminal.test(line) || terminal.test(kept[index + 1] || '') || !shortLine(kept[index + 1] || '')) ? line + '\n' : line).join('\n').replace(/\n(?=•)/g, '\n\n');
+        const flow = [];
+        const captions = [];
+        let cursor = 0;
+        while (cursor < kept.length) {
+            if (/^(Figure|Table) \d/.test(kept[cursor]) && shortLine(kept[cursor]) && flow[flow.length - 1] && !terminal.test(flow[flow.length - 1])) {
+                const block = [kept[cursor++]];
+                while (kept[cursor] && shortLine(kept[cursor]) && !terminal.test(kept[cursor])) block.push(kept[cursor++]);
+                captions.push(block.join(' '));
+            }
+            else {
+                flow.push(kept[cursor]);
+                if (terminal.test(kept[cursor++]) && captions.length) flow.push('', ...captions.splice(0).flatMap(caption => [caption, '']));
+            }
+        }
+        flow.push('', ...captions);
+        text = flow.map((line, index) => shortLine(line) && (terminal.test(line) || terminal.test(flow[index + 1] || '') || !shortLine(flow[index + 1] || '')) ? line + '\n' : line).join('\n').replace(/\n(?=•)/g, '\n\n');
 
-        const hyphenated = /(\p{L}+)([ \t]*)([-‐-–])[ \t]*\r?\n(\p{L}+)/gu;
-        const forms = [...new Set(Array.from(text.matchAll(hyphenated), match => [match[1] + match[4], match[1] + '-' + match[4]]).flat())];
+        const hyphenated = /(\p{L}+)[ \t]*([-‐-–])[ \t]*\r?\n(\p{L}+)/gu;
+        const forms = [...new Set(Array.from(text.matchAll(hyphenated), match => [match[1] + match[3], match[1] + '-' + match[3], match[1], match[3]]).flat())];
         for (let index = 0; index < forms.length; index += 10) await Promise.all(forms.slice(index, index + 10).map(form => this.lookupFrequency(form)));
-        text = text.replace(hyphenated, (_, first, space, dash, second) => (space ? this.frequencyCache[first + second] >= this.frequencyCache[first + '-' + second] : this.frequencyCache[first + second] > this.frequencyCache[first + '-' + second]) ? first + second : first + dash + second);
+        text = text.replace(hyphenated, (_, first, dash, second) => this.frequencyCache[first + '-' + second] > this.frequencyCache[first + second] || this.frequencyCache[first + '-' + second] === this.frequencyCache[first + second] && (this.frequencyCache[first] >= 1 || /^\p{Lu}+$/u.test(first)) && this.frequencyCache[second] >= 1 ? first + dash + second : first + second);
 
-        return text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/\xAD[ \t]*\n?/g, '').replace(/([-‐-―])\n(?=[^\n])/g, '$1').replace(/(?<![.!?…:]["'”’)\]]*)\n\n(?=\p{Ll})/gu, ' ').replace(/(?<!(?:[.!?…:]["'”’)\]]*|\n))\n(?!\n)/g, ' ').trim();
+        return text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/\xAD[ \t]*\n?/g, '').replace(/([-‐-―])\n(?=[^\n])/g, '$1').replace(/(?<![.!?…:]["')\]]*)\n\n(?=\p{Ll})/gu, ' ').replace(/(?<!(?:[.!?…:]["')\]]*|\n))\n(?!\n)/g, ' ').trim();
     }
 }
 
