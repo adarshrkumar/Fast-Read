@@ -9,7 +9,6 @@ class FastReader {
         this.loadedLibs = {};
         this.speechToken = 0;
 
-        // DOM elements
         this.fileInput = document.getElementById('fileInput');
         this.playPauseBtn = document.getElementById('playPauseBtn');
         this.speedSlider = document.getElementById('speedSlider');
@@ -25,7 +24,6 @@ class FastReader {
         this.voice1 = document.getElementById('voice1');
         this.voice2 = document.getElementById('voice2');
 
-        // Event listeners
         this.fileInput.addEventListener('change', this.handleFileUpload.bind(this));
         this.playPauseBtn.addEventListener('click', this.togglePlayPause.bind(this));
         this.speedSlider.addEventListener('input', this.updateSpeed.bind(this));
@@ -38,35 +36,28 @@ class FastReader {
         this.voice2.addEventListener('change', this.saveSettings.bind(this));
         this.speechSynthesis.addEventListener('voiceschanged', this.populateVoices.bind(this));
 
-        // Disable controls initially
         this.playPauseBtn.disabled = true;
         this.audioToggle.disabled = true;
 
-        // Initialize states
         this.loadSavedStates();
     }
 
     loadSavedStates() {
-        // Load general settings
         const savedSettings = JSON.parse(localStorage.getItem('fastReaderSettings') || '{}');
 
-        // Restore speed
         if (savedSettings.speed) {
             this.speedSlider.value = savedSettings.speed;
             this.speedValue.textContent = savedSettings.speed;
         }
 
-        // Restore audio state
         if (savedSettings.isAudioEnabled !== undefined) {
             this.isAudioEnabled = savedSettings.isAudioEnabled;
             this.audioToggle.querySelector('.material-icons').textContent = this.isAudioEnabled ? 'volume_up' : 'volume_off';
         }
 
-        // Initialize dark mode
         this.initializeDarkMode();
         this.populateVoices();
 
-        // Try to restore last opened file
         const lastFile = localStorage.getItem('fastReaderLastFile');
         if (lastFile) this.restoreFileState(JSON.parse(lastFile));
     }
@@ -101,12 +92,10 @@ class FastReader {
         this.playPauseBtn.disabled = false;
         this.audioToggle.disabled = false;
 
-        // Update the start reading button to show it's ready
         this.startReadingBtn.querySelector('.material-icons').textContent = 'check';
         this.startReadingBtn.textContent = 'Ready to Read';
         this.startReadingBtn.disabled = true;
 
-        // Ensure textarea is editable after restoring file state
         this.updateTextareaReadonlyState();
     }
 
@@ -118,9 +107,8 @@ class FastReader {
             this.darkModeToggle.querySelector('.material-icons').textContent = 'dark_mode';
         }
 
-        // Listen for system theme changes
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-            if (localStorage.getItem('darkMode') === null)this.toggleDarkMode(e.matches);
+            if (localStorage.getItem('darkMode') === null) this.toggleDarkMode(e.matches);
         });
     }
 
@@ -148,12 +136,10 @@ class FastReader {
             this.audioToggle.disabled = false;
             this.saveFileState();
 
-            // Update the start reading button to show it's ready
             this.startReadingBtn.querySelector('.material-icons').textContent = 'check';
             this.startReadingBtn.textContent = 'Ready to Read';
             this.startReadingBtn.disabled = true;
 
-            // Ensure textarea is editable after file upload
             this.updateTextareaReadonlyState();
         } catch (error) {
             console.error('Error reading file:', error);
@@ -172,20 +158,16 @@ class FastReader {
     }
 
     handleTextInput() {
-        // Enable/disable the start reading button based on text content
         this.startReadingBtn.disabled = this.textContent.value.trim().length === 0;
 
-        // Update button text based on whether we have text
         if (this.textContent.value.trim().length > 0) this.startReadingBtn.querySelector('.material-icons').textContent = 'play_arrow';
 
-        // Ensure textarea is editable when user is typing
         this.updateTextareaReadonlyState();
     }
 
     handleStartReading() {
         if (!this.textContent.value.trim()) return;
 
-        // Process the text similar to file upload
         this.textContent.value = this.textContent.value.trim();
         this.currentFileName = 'Manual Input';
         this.textContent.setSelectionRange(0, 0);
@@ -195,12 +177,10 @@ class FastReader {
         this.audioToggle.disabled = false;
         this.saveFileState();
 
-        // Update the start reading button to show it's ready
         this.startReadingBtn.querySelector('.material-icons').textContent = 'check';
         this.startReadingBtn.textContent = 'Ready to Read';
         this.startReadingBtn.disabled = true;
 
-        // Ensure textarea is editable after processing text
         this.updateTextareaReadonlyState();
     }
 
@@ -221,7 +201,6 @@ class FastReader {
             this.stopReading();
         }
 
-        // Update textarea readonly state
         this.updateTextareaReadonlyState();
     }
 
@@ -259,7 +238,6 @@ class FastReader {
 
         this.currentWordDisplay.textContent = match ? match[0] : 'Upload a text file to begin';
 
-        // Highlight current word in textarea if possible
         if (match) this.textContent.setSelectionRange(match.index, match.index + match[0].length);
     }
 
@@ -345,17 +323,14 @@ class FastReader {
         this.progressBar.style.width = `${read / total * 100}%`;
         this.wordCount.textContent = `${read}/${total} words`;
 
-        // Calculate time remaining
         const minutesRemaining = (total - read) / parseInt(this.speedSlider.value);
         const minutes = Math.floor(minutesRemaining);
         this.timeRemaining.textContent = `${minutes}:${Math.floor((minutesRemaining - minutes) * 60).toString().padStart(2, '0')}`;
     }
 
     updateTextareaReadonlyState() {
-        // Make textarea readonly when reading, editable when paused/stopped
         this.textContent.readOnly = this.isPlaying;
 
-        // Add visual feedback for readonly state
         if (this.isPlaying) {
             this.textContent.style.backgroundColor = 'var(--word-display-bg)';
             this.textContent.style.cursor = 'not-allowed';
@@ -485,7 +460,7 @@ class FastReader {
                         i += 2;
                     }
                     else {
-                        const m =/^\\([a-zA-Z]+)(-?\d+)? ?/.exec(src.slice(i, i + 40));
+                        const m = /^\\([a-zA-Z]+)(-?\d+)? ?/.exec(src.slice(i, i + 40));
                         if (!m) {
                             i += 2;
                             continue;
@@ -555,7 +530,7 @@ class FastReader {
             text = '';
             try {
                 let p = fcClx;
-                while (p < fcClx + dv.getUint32(0x01A6, true) &&tbl[p] === 0x01) p += 3 + tdv.getUint16(p + 1, true);
+                while (p < fcClx + dv.getUint32(0x01A6, true) && tbl[p] === 0x01) p += 3 + tdv.getUint16(p + 1, true);
                 if (tbl[p] !== 0x02) throw new Error('No piece table');
                 const pieces = (tdv.getUint32(p + 1, true) - 4) / 12;
                 p += 5;
@@ -590,5 +565,4 @@ class FastReader {
     }
 }
 
-// Initialize the application
 document.addEventListener('DOMContentLoaded', () => new FastReader()); 
