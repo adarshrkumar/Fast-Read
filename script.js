@@ -126,7 +126,7 @@ async function handleFileUpload(event) {
         saveFileState();
 
         startReadingBtn.querySelector('.material-icons').textContent = 'check';
-        startReadingBtn.textContent = 'Ready to Read';
+        startReadingBtn.lastChild.textContent = 'Ready to Read';
         startReadingBtn.disabled = true;
 
         updateTextareaReadonlyState();
@@ -149,7 +149,10 @@ function handleTextContentClick() {
 function handleTextInput() {
     startReadingBtn.disabled = textContent.value.trim().length === 0;
 
-    if (textContent.value.trim().length > 0) startReadingBtn.querySelector('.material-icons').textContent = 'play_arrow';
+    if (textContent.value.trim().length > 0) {
+        startReadingBtn.querySelector('.material-icons').textContent = 'play_arrow';
+        startReadingBtn.lastChild.textContent = 'Start Reading';
+    }
 
     updateTextareaReadonlyState();
 }
@@ -168,7 +171,7 @@ function handleStartReading() {
     saveFileState();
 
     startReadingBtn.querySelector('.material-icons').textContent = 'check';
-    startReadingBtn.textContent = 'Ready to Read';
+    startReadingBtn.lastChild.textContent = 'Ready to Read';
     startReadingBtn.disabled = true;
 
     updateTextareaReadonlyState();
@@ -245,8 +248,7 @@ async function lookupFrequency(word) {
     if (word in frequencyCache) return;
 
     try {
-        const [entry] = await (await fetch(`https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&md=f&max=1`)).json();
-        frequencyCache[word] = entry && entry.word.toLowerCase() === word.toLowerCase() ? parseFloat((entry.tags?.find(tag => tag.startsWith('f:')) || 'f:0').slice(2)) : 0;
+        frequencyCache[word] = (await (await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(`"${word.replace(/-/g, ' ')}"`)}&srlimit=1&srinfo=totalhits&format=json&origin=*`)).json()).query.searchinfo.totalhits;
     } catch {
         frequencyCache[word] = 0;
     }
@@ -632,7 +634,7 @@ async function extractText(file) {
     const hyphenated = /(\p{L}+)[ \t]*([-‐-–])[ \t]*\r?\n(\p{L}+)/gu;
     const forms = [...new Set(Array.from(text.matchAll(hyphenated), match => [`${match[1]}${match[3]}`, `${match[1]}-${match[3]}`, match[1], match[3]]).flat())];
     for (let index = 0; index < forms.length; index += 10) await Promise.all(forms.slice(index, index + 10).map(form => lookupFrequency(form)));
-    text = text.replace(hyphenated, (_, first, dash, second) => frequencyCache[`${first}-${second}`] > frequencyCache[`${first}${second}`] || frequencyCache[`${first}-${second}`] === frequencyCache[`${first}${second}`] && (frequencyCache[first] >= 1 || /^\p{Lu}+$/u.test(first)) && frequencyCache[second] >= 1 ? `${first}${dash}${second}` : `${first}${second}`);
+    text = text.replace(hyphenated, (_, first, dash, second) => frequencyCache[`${first}-${second}`] > frequencyCache[`${first}${second}`] || frequencyCache[`${first}-${second}`] === frequencyCache[`${first}${second}`] && (frequencyCache[first] >= 1000 || /^\p{Lu}+$/u.test(first)) && frequencyCache[second] >= 1000 ? `${first}${dash}${second}` : `${first}${second}`);
 
     text = text.replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/\n{3,}/g, '\n\n').replace(/([-‐-―])\n(?=[^\n])/g, '$1').replace(/(?<![.!?…:]["')\]]*)\n\n(?=\p{Ll})/gu, ' ').replace(/(?<!(?:[.!?…:]["')\]]*|\n))\n(?!\n)/g, ' ').trim();
 
