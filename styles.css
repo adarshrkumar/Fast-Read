@@ -125,16 +125,6 @@ body {
     }
 }
 
-.selection-controls {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-
-    @media (max-width: 768px) {
-        justify-content: center;
-    }
-}
-
 .start-reading-btn {
     background-color: var(--icon-color);
     color: white;
@@ -174,7 +164,18 @@ body {
     }
 }
 
-#startPosition {
+.voice-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+
+    select {
+        width: 100%;
+    }
+}
+
+.voice-controls select {
     padding: 0.5rem;
     border: 1px solid var(--border-color);
     border-radius: 4px;
