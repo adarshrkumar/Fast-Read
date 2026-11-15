@@ -606,6 +606,4 @@ class FastReader {
 }
 
 // Initialize the application
-document.addEventListener('DOMContentLoaded', () => {
-    new FastReader();
-}); 
+document.addEventListener('DOMContentLoaded', () => new FastReader()); 
