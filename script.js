@@ -49,7 +49,7 @@ class FastReader {
     loadSavedStates() {
         // Load general settings
         const savedSettings = JSON.parse(localStorage.getItem('fastReaderSettings') || '{}');
-   
+
         // Restore speed
         if (savedSettings.speed) {
             this.speedSlider.value = savedSettings.speed;
@@ -59,7 +59,7 @@ class FastReader {
         // Restore audio state
         if (savedSettings.isAudioEnabled !== undefined) {
             this.isAudioEnabled = savedSettings.isAudioEnabled;
-            this.audioToggle.querySelector('.material-icons').textContent = 
+            this.audioToggle.querySelector('.material-icons').textContent =
                 this.isAudioEnabled ? 'volume_up' : 'volume_off';
         }
 
@@ -103,12 +103,12 @@ class FastReader {
         this.playPauseBtn.disabled = false;
         this.audioToggle.disabled = false;
         this.startPosition.disabled = false;
-   
+
         // Update the start reading button to show it's ready
         this.startReadingBtn.querySelector('.material-icons').textContent = 'check';
         this.startReadingBtn.textContent = 'Ready to Read';
         this.startReadingBtn.disabled = true;
-   
+
         // Ensure textarea is editable after restoring file state
         this.updateTextareaReadonlyState();
     }
@@ -116,7 +116,7 @@ class FastReader {
     initializeDarkMode() {
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         const savedMode = localStorage.getItem('darkMode');
-   
+
         if (savedMode === 'true' || (savedMode === null && prefersDark)) {
             document.body.classList.add('dark-mode');
             this.darkModeToggle.querySelector('.material-icons').textContent = 'dark_mode';
@@ -132,7 +132,7 @@ class FastReader {
 
     toggleDarkMode(event, forcedState) {
         const isDark = forcedState !== undefined ? forcedState : !document.body.classList.contains('dark-mode');
-   
+
         if (isDark) {
             document.body.classList.add('dark-mode');
             this.darkModeToggle.querySelector('.material-icons').textContent = 'dark_mode';
@@ -163,12 +163,12 @@ class FastReader {
             this.audioToggle.disabled = false;
             this.startPosition.disabled = false;
             this.saveFileState();
-  
+
             // Update the start reading button to show it's ready
             this.startReadingBtn.querySelector('.material-icons').textContent = 'check';
             this.startReadingBtn.textContent = 'Ready to Read';
             this.startReadingBtn.disabled = true;
-  
+
             // Ensure textarea is editable after file upload
             this.updateTextareaReadonlyState();
         } catch (error) {
@@ -203,12 +203,12 @@ class FastReader {
         // Enable/disable the start reading button based on text content
         const hasText = this.textContent.value.trim().length > 0;
         this.startReadingBtn.disabled = !hasText;
-   
+
         // Update button text based on whether we have text
         if (hasText) {
             this.startReadingBtn.querySelector('.material-icons').textContent = 'play_arrow';
         }
-   
+
         // Ensure textarea is editable when user is typing
         this.updateTextareaReadonlyState();
     }
@@ -228,12 +228,12 @@ class FastReader {
         this.audioToggle.disabled = false;
         this.startPosition.disabled = false;
         this.saveFileState();
-   
+
         // Update the start reading button to show it's ready
         this.startReadingBtn.querySelector('.material-icons').textContent = 'check';
         this.startReadingBtn.textContent = 'Ready to Read';
         this.startReadingBtn.disabled = true;
-   
+
         // Ensure textarea is editable after processing text
         this.updateTextareaReadonlyState();
     }
@@ -242,7 +242,7 @@ class FastReader {
         if (this.words.length === 0) return;
 
         this.isPlaying = !this.isPlaying;
-        this.playPauseBtn.querySelector('.material-icons').textContent = 
+        this.playPauseBtn.querySelector('.material-icons').textContent =
             this.isPlaying ? 'pause' : 'play_arrow';
 
         if (this.isPlaying) {
@@ -250,7 +250,7 @@ class FastReader {
         } else {
             this.stopReading();
         }
-   
+
         // Update textarea readonly state
         this.updateTextareaReadonlyState();
     }
@@ -278,7 +278,7 @@ class FastReader {
 
         this.updateDisplay();
         this.updateProgress();
-   
+
         if (this.isAudioEnabled) {
             this.speakWord(this.words[this.currentIndex]);
         }
@@ -296,7 +296,7 @@ class FastReader {
 
     updateDisplay() {
         this.currentWordDisplay.textContent = this.words[this.currentIndex] || 'Upload a text file to begin';
-   
+
         // Highlight current word in textarea if possible
         if (this.words[this.currentIndex]) {
             const wordStart = this.fullText.indexOf(this.words[this.currentIndex]);
@@ -325,9 +325,9 @@ class FastReader {
 
     handleAudioToggle() {
         this.isAudioEnabled = !this.isAudioEnabled;
-        this.audioToggle.querySelector('.material-icons').textContent = 
+        this.audioToggle.querySelector('.material-icons').textContent =
             this.isAudioEnabled ? 'volume_up' : 'volume_off';
-   
+
         if (!this.isAudioEnabled && this.utterance) {
             this.speechSynthesis.cancel();
         }
@@ -354,7 +354,7 @@ class FastReader {
     updateTextareaReadonlyState() {
         // Make textarea readonly when reading, editable when paused/stopped
         this.textContent.readOnly = this.isPlaying;
-   
+
         // Add visual feedback for readonly state
         if (this.isPlaying) {
             this.textContent.style.backgroundColor = 'var(--word-display-bg)';

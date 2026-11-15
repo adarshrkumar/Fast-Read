@@ -316,26 +316,26 @@ label {
         padding: 2rem;
         width: 98%;
     }
-    
+
     .text-controls {
         flex-direction: column;
         align-items: stretch;
         gap: 1rem;
     }
-    
+
     .start-reading-btn {
         width: 100%;
         justify-content: center;
     }
-    
+
     .selection-controls {
         justify-content: center;
     }
-    
+
     #currentWord {
         font-size: 2rem;
     }
-    
+
     .playback-buttons {
         gap: 1rem;
     }
