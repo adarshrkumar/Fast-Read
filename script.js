@@ -86,10 +86,7 @@ if (lastFile) {
     playPauseBtn.disabled = false;
     audioToggle.disabled = false;
     downloadAudioBtn.disabled = false;
-
-    startReadingBtn.querySelector('.material-icons').textContent = 'check';
-    startReadingBtn.textContent = 'Ready to Read';
-    startReadingBtn.disabled = true;
+    startReadingBtn.disabled = false;
 
     updateTextareaReadonlyState();
 }
