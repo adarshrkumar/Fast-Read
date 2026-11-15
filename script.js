@@ -53,12 +53,11 @@ fileInput.addEventListener('change', async event => {
                     }
                 }
                 else if (src[i] === '}') {
-                    const [state, ...rest] = stack;
-                    stack = rest;
-                    if (state) {
-                        skip = state.skip;
-                        uc = state.uc;
+                    if (stack[0]) {
+                        skip = stack[0].skip;
+                        uc = stack[0].uc;
                     }
+                    stack = stack.slice(1);
                     i++;
                 }
                 else if (src[i] === '\\') {
