@@ -717,7 +717,14 @@ class FastReader {
         for (let index = 0; index < forms.length; index += 10) await Promise.all(forms.slice(index, index + 10).map(form => this.lookupFrequency(form)));
         text = text.replace(hyphenated, (_, first, dash, second) => this.frequencyCache[first + '-' + second] > this.frequencyCache[first + second] || this.frequencyCache[first + '-' + second] === this.frequencyCache[first + second] && (this.frequencyCache[first] >= 1 || /^\p{Lu}+$/u.test(first)) && this.frequencyCache[second] >= 1 ? first + dash + second : first + second);
 
-        return text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/\xAD[ \t]*\n?/g, '').replace(/([-‐-―])\n(?=[^\n])/g, '$1').replace(/(?<![.!?…:]["')\]]*)\n\n(?=\p{Ll})/gu, ' ').replace(/(?<!(?:[.!?…:]["')\]]*|\n))\n(?!\n)/g, ' ').trim();
+        text = text.replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/\n{3,}/g, '\n\n').replace(/([-‐-―])\n(?=[^\n])/g, '$1').replace(/(?<![.!?…:]["')\]]*)\n\n(?=\p{Ll})/gu, ' ').replace(/(?<!(?:[.!?…:]["')\]]*|\n))\n(?!\n)/g, ' ').trim();
+
+        const bulletPattern = /^[•◦▪▫●○■□‣⁃∙·]\s*/;
+        let bullet = 0;
+        return text.split(/\n{2,}/).map(paragraph => {
+            bullet = bulletPattern.test(paragraph) ? bullet + 1 : 0;
+            return bullet ? paragraph.replace(bulletPattern, `Bullet ${bullet}: `) : paragraph;
+        }).join('\n\n');
     }
 }
 
