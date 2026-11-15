@@ -674,7 +674,7 @@ class FastReader {
         else if (['pdf', 'doc', 'docx', 'odt'].includes(ext)) throw new Error('Could not read this ' + ext.toUpperCase() + ' file.');
         else text = this.decodeBytes(bytes);
 
-        return text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+        return text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/(?<!(?:[.!?…]["'”’)\]]*|\n))\n(?!\n)/g, ' ').trim();
     }
 }
 
