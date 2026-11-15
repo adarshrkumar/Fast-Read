@@ -38,13 +38,13 @@ fileInput.addEventListener('change', async event => {
             let out = '';
             let stack = [];
             let skip = false;
-            let uc = 1;
+            let unicodeSkipCount = 1;
             let skipChars = 0;
             let i = 0;
 
             while (i < src.length) {
                 if (src[i] === '{') {
-                    stack = [{ skip: skip, uc: uc }, ...stack];
+                    stack = [{ skip: skip, unicodeSkipCount: unicodeSkipCount }, ...stack];
                     i++;
                     if (src[i] === '\\' && src[i + 1] === '*') skip = true;
                     else if (src[i] === '\\') {
@@ -55,7 +55,7 @@ fileInput.addEventListener('change', async event => {
                 else if (src[i] === '}') {
                     if (stack[0]) {
                         skip = stack[0].skip;
-                        uc = stack[0].uc;
+                        unicodeSkipCount = stack[0].unicodeSkipCount;
                     }
                     stack = stack.slice(1);
                     i++;
@@ -110,11 +110,11 @@ fileInput.addEventListener('change', async event => {
                             case 'ldblquote': out += '“'; break;
                             case 'rdblquote': out += '”'; break;
                             case 'bullet': out += '•'; break;
-                            case 'uc': if (param !== undefined) uc = param; break;
+                            case 'uc': if (param !== undefined) unicodeSkipCount = param; break;
                             case 'u':
                                 if (param !== undefined) {
                                     out += String.fromCharCode(param < 0 ? param + 65536 : param);
-                                    skipChars = uc;
+                                    skipChars = unicodeSkipCount;
                                 }
                                 break;
                         }
@@ -145,37 +145,25 @@ fileInput.addEventListener('change', async event => {
             const container = window.CFB.read(bytes, { type: 'array' });
             const wordEntry = window.CFB.find(container, 'WordDocument');
             if (!wordEntry) throw new Error('Not a valid Word .doc file');
-            const wd = new Uint8Array(wordEntry.content);
-            const dv = new DataView(wd.buffer, wd.byteOffset, wd.byteLength);
-            const tableEntry = window.CFB.find(container, dv.getUint16(0x0A, true) & 0x0200 ? '1Table' : '0Table');
+            const wordDocument = new Uint8Array(wordEntry.content);
+            const tableEntry = window.CFB.find(container, new DataView(wordDocument.buffer).getUint16(0x0A, true) & 0x0200 ? '1Table' : '0Table');
             if (!tableEntry) throw new Error('Word table stream missing');
-            const tbl = new Uint8Array(tableEntry.content);
-            const tdv = new DataView(tbl.buffer, tbl.byteOffset, tbl.byteLength);
-            const ccpText = dv.getInt32(0x4C, true);
-            const fcClx = dv.getUint32(0x01A2, true);
+            const tableStream = new Uint8Array(tableEntry.content);
 
             text = '';
             try {
-                let p = fcClx;
-                while (p < fcClx + dv.getUint32(0x01A6, true) && tbl[p] === 0x01) p += 3 + tdv.getUint16(p + 1, true);
-                if (tbl[p] !== 0x02) throw new Error('No piece table');
-                const pieces = (tdv.getUint32(p + 1, true) - 4) / 12;
-                p += 5;
-                const cps = Array.from({ length: pieces + 1 }, (_, k) => tdv.getUint32(p + k * 4, true));
+                let pieceTableOffset = new DataView(wordDocument.buffer).getUint32(0x01A2, true);
+                while (pieceTableOffset < new DataView(wordDocument.buffer).getUint32(0x01A2, true) + new DataView(wordDocument.buffer).getUint32(0x01A6, true) && tableStream[pieceTableOffset] === 0x01) pieceTableOffset += 3 + new DataView(tableStream.buffer).getUint16(pieceTableOffset + 1, true);
+                if (tableStream[pieceTableOffset] !== 0x02) throw new Error('No piece table');
+                const pieces = (new DataView(tableStream.buffer).getUint32(pieceTableOffset + 1, true) - 4) / 12;
                 for (let k = 0; k < pieces; k++) {
-                    const fcRaw = tdv.getUint32(p + (pieces + 1) * 4 + k * 8 + 2, true);
-                    const fc = fcRaw & 0x3FFFFFFF;
-                    let len = cps[k + 1] - cps[k];
-                    if (cps[k] >= ccpText) break;
-                    if (cps[k] + len > ccpText) len = ccpText - cps[k];
-                    if (fcRaw & 0x40000000) {
-                        const offset = fc >> 1;
-                        text += decodeBytes(wd.subarray(offset, offset + len), 'windows-1252');
-                    }
-                    else text += decodeBytes(wd.subarray(fc, fc + len * 2), 'utf-16le');
+                    const textPointer = new DataView(tableStream.buffer).getUint32(pieceTableOffset + 5 + (pieces + 1) * 4 + k * 8 + 2, true);
+                    if (new DataView(tableStream.buffer).getUint32(pieceTableOffset + 5 + k * 4, true) >= new DataView(wordDocument.buffer).getInt32(0x4C, true)) break;
+                    if (textPointer & 0x40000000) text += decodeBytes(wordDocument.subarray((textPointer & 0x3FFFFFFF) >> 1, ((textPointer & 0x3FFFFFFF) >> 1) + Math.min(new DataView(tableStream.buffer).getUint32(pieceTableOffset + 5 + (k + 1) * 4, true), new DataView(wordDocument.buffer).getInt32(0x4C, true)) - new DataView(tableStream.buffer).getUint32(pieceTableOffset + 5 + k * 4, true)), 'windows-1252');
+                    else text += decodeBytes(wordDocument.subarray(textPointer & 0x3FFFFFFF, (textPointer & 0x3FFFFFFF) + (Math.min(new DataView(tableStream.buffer).getUint32(pieceTableOffset + 5 + (k + 1) * 4, true), new DataView(wordDocument.buffer).getInt32(0x4C, true)) - new DataView(tableStream.buffer).getUint32(pieceTableOffset + 5 + k * 4, true)) * 2), 'utf-16le');
                 }
             } catch {
-                text = decodeBytes(wd.subarray(0x200), 'windows-1252');
+                text = decodeBytes(wordDocument.subarray(0x200), 'windows-1252');
             }
             text = text.replace(/\u0013[^\u0014\u0015]*\u0014/g, '').replace(/[\u0013\u0014\u0015]/g, '').replace(/\u0007/g, '\t').replace(/[\u000B\u000C]/g, '\n').replace(/\u0001|\u0008/g, '');
         }
