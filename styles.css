@@ -175,6 +175,10 @@ body {
     }
 }
 
+.audio-export {
+    margin-top: 1.5rem;
+}
+
 .voice-controls select {
     padding: 0.5rem;
     border: 1px solid var(--border-color);

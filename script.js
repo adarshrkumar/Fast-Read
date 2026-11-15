@@ -2,8 +2,9 @@ class FastReader {
     constructor() {
         this.isPlaying = false;
         this.intervalId = null;
-        this.speechSynthesis = window.speechSynthesis;
-        this.utterance = null;
+        this.audio = new Audio();
+        this.ttsModule = null;
+        this.prefetch = null;
         this.isAudioEnabled = false;
         this.currentFileName = '';
         this.loadedLibs = {};
@@ -23,6 +24,10 @@ class FastReader {
         this.startReadingBtn = document.getElementById('startReadingBtn');
         this.voice1 = document.getElementById('voice1');
         this.voice2 = document.getElementById('voice2');
+        this.downloadAudioBtn = document.getElementById('downloadAudioBtn');
+        this.generationContainer = document.getElementById('generationContainer');
+        this.generationProgress = document.getElementById('generationProgress');
+        this.generationStatus = document.getElementById('generationStatus');
 
         this.fileInput.addEventListener('change', this.handleFileUpload.bind(this));
         this.playPauseBtn.addEventListener('click', this.togglePlayPause.bind(this));
@@ -34,10 +39,11 @@ class FastReader {
         this.startReadingBtn.addEventListener('click', this.handleStartReading.bind(this));
         this.voice1.addEventListener('change', this.saveSettings.bind(this));
         this.voice2.addEventListener('change', this.saveSettings.bind(this));
-        this.speechSynthesis.addEventListener('voiceschanged', this.populateVoices.bind(this));
+        this.downloadAudioBtn.addEventListener('click', this.downloadAudio.bind(this));
 
         this.playPauseBtn.disabled = true;
         this.audioToggle.disabled = true;
+        this.downloadAudioBtn.disabled = true;
 
         this.loadSavedStates();
     }
@@ -91,6 +97,7 @@ class FastReader {
         this.updateProgress();
         this.playPauseBtn.disabled = false;
         this.audioToggle.disabled = false;
+        this.downloadAudioBtn.disabled = false;
 
         this.startReadingBtn.querySelector('.material-icons').textContent = 'check';
         this.startReadingBtn.textContent = 'Ready to Read';
@@ -134,6 +141,7 @@ class FastReader {
             this.updateProgress();
             this.playPauseBtn.disabled = false;
             this.audioToggle.disabled = false;
+            this.downloadAudioBtn.disabled = false;
             this.saveFileState();
 
             this.startReadingBtn.querySelector('.material-icons').textContent = 'check';
@@ -175,6 +183,7 @@ class FastReader {
         this.updateProgress();
         this.playPauseBtn.disabled = false;
         this.audioToggle.disabled = false;
+        this.downloadAudioBtn.disabled = false;
         this.saveFileState();
 
         this.startReadingBtn.querySelector('.material-icons').textContent = 'check';
@@ -219,7 +228,9 @@ class FastReader {
             clearInterval(this.intervalId);
             this.intervalId = null;
         }
-        if (this.utterance) this.speechSynthesis.cancel();
+        this.audio.pause();
+        this.prefetch = null;
+        this.saveFileState();
     }
 
     displayNextWord() {
@@ -243,58 +254,161 @@ class FastReader {
 
     updateSpeed() {
         this.speedValue.textContent = this.speedSlider.value;
-        if (this.isPlaying) {
+        this.audio.playbackRate = parseInt(this.speedSlider.value) / 200;
+        if (this.isPlaying && !this.isAudioEnabled) {
             this.stopReading();
             this.startReading();
         }
         this.saveSettings();
     }
 
-    speakFrom(offset) {
-        const paragraphLength = this.textContent.value.slice(offset).search(/\n\s*\n/);
-        const segment = this.textContent.value.slice(offset, paragraphLength === -1 ? undefined : offset + paragraphLength).replace(/\s/g, ' ');
-        const token = ++this.speechToken;
-
-        this.utterance = new SpeechSynthesisUtterance(segment);
-        this.utterance.rate = Math.min(10, parseInt(this.speedSlider.value) / 200);
-        this.utterance.voice = this.speechSynthesis.getVoices()[(this.textContent.value.slice(0, offset).trimStart().split(/\n\s*\n/).length % 2 === 1 ? this.voice1 : this.voice2).selectedIndex];
-        this.utterance.onboundary = this.handleSpeechBoundary.bind(this, token, offset);
-        this.utterance.onend = this.handleSpeechEnd.bind(this, token, offset + segment.length);
-        this.speechSynthesis.speak(this.utterance);
+    loadTts() {
+        return this.ttsModule ||= import('https://esm.sh/@diffusionstudio/vits-web@1.0.3').catch(error => {
+            this.ttsModule = null;
+            throw error;
+        });
     }
 
-    handleSpeechBoundary(token, offset, event) {
-        if (token !== this.speechToken || event.name !== 'word') return;
+    getParagraph(offset) {
+        const length = this.textContent.value.slice(offset).search(/\n\s*\n/);
+        const end = length === -1 ? this.textContent.value.length : offset + length;
+        const gap = this.textContent.value.slice(end).search(/\S/);
 
-        this.textContent.setSelectionRange(offset + event.charIndex, offset + event.charIndex);
+        return {
+            end: end,
+            next: gap === -1 ? -1 : end + gap,
+            text: this.textContent.value.slice(offset, end).replace(/\s+/g, ' ').trim(),
+            voice: (this.textContent.value.slice(0, offset).trimStart().split(/\n\s*\n/).length % 2 === 1 ? this.voice1 : this.voice2).value
+        };
+    }
+
+    synthesize(paragraph, onProgress) {
+        return this.loadTts().then(tts => tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress));
+    }
+
+    async speakFrom(offset) {
+        const token = ++this.speechToken;
+        const paragraph = this.getParagraph(offset);
+
+        try {
+            this.currentWordDisplay.textContent = 'Generating audio...';
+            const blob = await (this.prefetch && this.prefetch.offset === offset ? this.prefetch.promise : this.synthesize(paragraph, progress => this.currentWordDisplay.textContent = `Downloading voice ${Math.round(progress.loaded * 100 / progress.total)}%`));
+            if (token !== this.speechToken) return;
+
+            URL.revokeObjectURL(this.audio.src);
+            this.audio.src = URL.createObjectURL(blob);
+            this.audio.playbackRate = parseInt(this.speedSlider.value) / 200;
+            this.audio.onended = () => this.handleSpeechEnd(token, paragraph);
+            await this.audio.play();
+            if (token !== this.speechToken) return;
+
+            this.intervalId = setInterval(() => this.syncWord(offset, paragraph.end), 100);
+            this.prefetch = paragraph.next === -1 ? null : { offset: paragraph.next, promise: this.synthesize(this.getParagraph(paragraph.next)) };
+        } catch (error) {
+            if (token !== this.speechToken) return;
+            console.error('Error generating audio:', error);
+            this.currentWordDisplay.textContent = 'Error generating audio: ' + (error.message || 'unknown error');
+            this.togglePlayPause();
+        }
+    }
+
+    syncWord(start, end) {
+        if (!this.audio.duration) return;
+
+        const position = Math.min(end - 1, start + Math.floor(this.audio.currentTime / this.audio.duration * (end - start)));
+        this.textContent.setSelectionRange(position, position);
         this.updateDisplay();
         this.updateProgress();
-        this.saveFileState();
     }
 
-    handleSpeechEnd(token, end) {
+    handleSpeechEnd(token, paragraph) {
         if (token !== this.speechToken) return;
-        if (!/\S/.test(this.textContent.value.slice(end))) return this.togglePlayPause();
 
-        this.textContent.setSelectionRange(end + 1, end + 1);
-        this.updateDisplay();
-        this.speakFrom(this.textContent.selectionStart);
+        clearInterval(this.intervalId);
+        if (paragraph.next === -1) return this.togglePlayPause();
+
+        this.speakFrom(paragraph.next);
     }
 
-    populateVoices() {
-        const voices = this.speechSynthesis.getVoices();
-        if (voices.length === 0) return;
+    async populateVoices() {
+        try {
+            const voices = await (await this.loadTts()).voices();
 
-        for (const [index, select] of [this.voice1, this.voice2].entries()) {
-            select.replaceChildren();
-            for (const voice of voices) {
-                const option = document.createElement('option');
-                option.value = voice.voiceURI;
-                option.textContent = voice.name + ' (' + voice.lang + ')';
-                select.appendChild(option);
+            for (const [index, select] of [this.voice1, this.voice2].entries()) {
+                select.replaceChildren();
+                for (const voice of voices) {
+                    const option = document.createElement('option');
+                    option.value = voice.key;
+                    option.textContent = `${voice.language.name_english} (${voice.language.country_english}) - ${voice.name} (${voice.quality})`;
+                    select.appendChild(option);
+                }
+                select.value = JSON.parse(localStorage.getItem('fastReaderSettings') || '{}')['voice' + (index + 1)] || ['en_US-hfc_female-medium', 'en_US-hfc_male-medium'][index];
+                if (!select.value) select.value = voices[Math.min(index, voices.length - 1)].key;
             }
-            select.value = JSON.parse(localStorage.getItem('fastReaderSettings') || '{}')['voice' + (index + 1)];
-            if (!select.value) select.value = voices[Math.min(index, voices.length - 1)].voiceURI;
+        } catch (error) {
+            console.error('Error loading voices:', error);
+        }
+    }
+
+    async downloadAudio() {
+        if (!/\S/.test(this.textContent.value)) return;
+
+        this.downloadAudioBtn.disabled = true;
+        this.generationContainer.hidden = false;
+        this.generationProgress.style.width = '0%';
+        this.generationStatus.textContent = 'Generating audio... 0%';
+
+        try {
+            const sampleRate = 22050;
+            const context = new AudioContext({ sampleRate: sampleRate });
+            const chunks = [];
+            let offset = this.textContent.value.search(/\S/);
+
+            while (offset !== -1) {
+                const paragraph = this.getParagraph(offset);
+                chunks.push(Int16Array.from((await context.decodeAudioData(await (await this.synthesize(paragraph, progress => this.generationStatus.textContent = `Downloading voice ${Math.round(progress.loaded * 100 / progress.total)}%`)).arrayBuffer())).getChannelData(0), sample => Math.max(-1, Math.min(1, sample)) * 32767), new Int16Array(Math.round(sampleRate * 0.4)));
+                const percent = Math.round(paragraph.end / this.textContent.value.length * 100);
+                this.generationProgress.style.width = `${percent}%`;
+                this.generationStatus.textContent = `Generating audio... ${percent}%`;
+                offset = paragraph.next;
+            }
+            context.close();
+
+            const samples = chunks.reduce((total, chunk) => total + chunk.length, 0);
+            const view = new DataView(new ArrayBuffer(44 + samples * 2));
+            const writeText = (position, text) => [...text].forEach((character, index) => view.setUint8(position + index, character.charCodeAt(0)));
+            writeText(0, 'RIFF');
+            view.setUint32(4, 36 + samples * 2, true);
+            writeText(8, 'WAVEfmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeText(36, 'data');
+            view.setUint32(40, samples * 2, true);
+
+            let position = 44;
+            for (const chunk of chunks) {
+                for (const sample of chunk) {
+                    view.setInt16(position, sample, true);
+                    position += 2;
+                }
+            }
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(new Blob([view], { type: 'audio/wav' }));
+            link.download = (this.currentFileName.replace(/\.[^.]+$/, '') || 'read-aloud') + '.wav';
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+            this.generationStatus.textContent = 'Done. Download started.';
+        } catch (error) {
+            console.error('Error generating audio:', error);
+            this.generationStatus.textContent = 'Error generating audio: ' + (error.message || 'unknown error');
+        } finally {
+            this.downloadAudioBtn.disabled = false;
         }
     }
 
@@ -302,7 +416,6 @@ class FastReader {
         this.isAudioEnabled = !this.isAudioEnabled;
         this.audioToggle.querySelector('.material-icons').textContent = this.isAudioEnabled ? 'volume_up' : 'volume_off';
 
-        if (!this.isAudioEnabled && this.utterance) this.speechSynthesis.cancel();
         if (this.isPlaying) {
             this.stopReading();
             this.startReading();

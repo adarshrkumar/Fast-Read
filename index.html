@@ -36,6 +36,20 @@
                 <label for="voice2">Speaker 2 voice:</label>
                 <select id="voice2"></select>
             </div>
+            <div class="audio-export">
+                <button id="downloadAudioBtn" class="start-reading-btn">
+                    <span class="material-icons">download</span>
+                    Download Audio
+                </button>
+                <div class="progress-container" id="generationContainer" hidden>
+                    <div class="progress-bar">
+                        <div class="progress" id="generationProgress"></div>
+                    </div>
+                    <div class="progress-stats">
+                        <span id="generationStatus"></span>
+                    </div>
+                </div>
+            </div>
             <div class="speed-control">
                 <label for="speedSlider">Speed (words per minute):</label>
                 <input type="range" id="speedSlider" min="60" max="600" value="200">
