@@ -276,7 +276,7 @@ class FastReader {
         try {
             const [entry] = await (await fetch(`https://api.datamuse.com/words?sp=${encodeURIComponent(word)}&md=f&max=1`)).json();
             this.frequencyCache[word] = entry && entry.word.toLowerCase() === word.toLowerCase() ? parseFloat((entry.tags?.find(tag => tag.startsWith('f:')) || 'f:0').slice(2)) : 0;
-        } catch (error) {
+        } catch {
             this.frequencyCache[word] = 0;
         }
     }
@@ -304,11 +304,13 @@ class FastReader {
 
         try {
             this.currentWordDisplay.textContent = 'Generating audio...';
-            const blob = await (this.prefetch && this.prefetch.offset === offset ? this.prefetch.promise : this.synthesize(paragraph, progress => this.currentWordDisplay.textContent = `Downloading voice ${Math.round(progress.loaded * 100 / progress.total)}%`));
+            await (this.prefetch && this.prefetch.offset === offset ? this.prefetch.promise : this.synthesize(paragraph, progress => this.currentWordDisplay.textContent = `Downloading voice ${Math.round(progress.loaded * 100 / progress.total)}%`)).then(blob => {
+                if (token !== this.speechToken) return;
+                URL.revokeObjectURL(this.audio.src);
+                this.audio.src = URL.createObjectURL(blob);
+            });
             if (token !== this.speechToken) return;
 
-            URL.revokeObjectURL(this.audio.src);
-            this.audio.src = URL.createObjectURL(blob);
             this.audio.playbackRate = parseInt(this.speedSlider.value) / 200;
             this.audio.onended = () => this.handleSpeechEnd(token, paragraph);
             await this.audio.play();
@@ -487,7 +489,7 @@ class FastReader {
     decodeBytes(bytes, label) {
         try {
             return new TextDecoder(label || 'utf-8').decode(bytes);
-        } catch (error) {
+        } catch {
             return new TextDecoder('windows-1252').decode(bytes);
         }
     }
@@ -673,14 +675,13 @@ class FastReader {
                     }
                     else text += this.decodeBytes(wd.subarray(fc, fc + len * 2), 'utf-16le');
                 }
-            } catch (error) {
+            } catch {
                 text = this.decodeBytes(wd.subarray(0x200), 'windows-1252');
             }
             text = text.replace(/\u0013[^\u0014\u0015]*\u0014/g, '').replace(/[\u0013\u0014\u0015]/g, '').replace(/\u0007/g, '\t').replace(/[\u000B\u000C]/g, '\n').replace(/\u0001|\u0008/g, '');
         }
         else if (ext === 'wri') {
-            const end = Math.min(new DataView(buf).getUint32(0x0E, true) || buf.byteLength, buf.byteLength);
-            text = this.decodeBytes(bytes.subarray(0x80, Math.max(0x80, end)), 'windows-1252').replace(/\u000C/g, '\n');
+            text = this.decodeBytes(bytes.subarray(0x80, Math.max(0x80, Math.min(new DataView(buf).getUint32(0x0E, true) || buf.byteLength, buf.byteLength))), 'windows-1252').replace(/\u000C/g, '\n');
         }
         else if (ext === 'rtfd') throw new Error('RTFD is a folder bundle. Choose the TXT.rtf file inside it.');
         else if (['pdf', 'doc', 'docx', 'odt'].includes(ext)) throw new Error('Could not read this ' + ext.toUpperCase() + ' file.');
@@ -691,7 +692,7 @@ class FastReader {
         for (let index = 0; index < forms.length; index += 10) await Promise.all(forms.slice(index, index + 10).map(form => this.lookupFrequency(form)));
         text = text.replace(hyphenated, (_, first, dash, second) => this.frequencyCache[first + second] > this.frequencyCache[first + '-' + second] ? first + second : first + dash + second);
 
-        return text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/­[ \t]*\n?/g, '').replace(/([-‐-―])\n(?=[^\n])/g, '$1').replace(/(?<!(?:[.!?…]["'”’)\]]*|\n))\n(?!\n)/g, ' ').trim();
+        return text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/\xAD[ \t]*\n?/g, '').replace(/([-‐-―])\n(?=[^\n])/g, '$1').replace(/(?<!(?:[.!?…]["'”’)\]]*|\n))\n(?!\n)/g, ' ').trim();
     }
 }
 
