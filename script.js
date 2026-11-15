@@ -686,12 +686,12 @@ class FastReader {
         else if (['pdf', 'doc', 'docx', 'odt'].includes(ext)) throw new Error('Could not read this ' + ext.toUpperCase() + ' file.');
         else text = this.decodeBytes(bytes);
 
-        const hyphenated = /(\p{L}+)-[ \t]*\n(\p{L}+)/gu;
-        const forms = [...new Set(Array.from(text.matchAll(hyphenated), match => [match[1] + match[2], match[1] + '-' + match[2]]).flat())];
+        const hyphenated = /(\p{L}+)([-‐-–])[ \t]*\r?\n(\p{L}+)/gu;
+        const forms = [...new Set(Array.from(text.matchAll(hyphenated), match => [match[1] + match[3], match[1] + '-' + match[3]]).flat())];
         for (let index = 0; index < forms.length; index += 10) await Promise.all(forms.slice(index, index + 10).map(form => this.lookupFrequency(form)));
-        text = text.replace(hyphenated, (_, first, second) => this.frequencyCache[first + second] > this.frequencyCache[first + '-' + second] ? first + second : first + '-' + second);
+        text = text.replace(hyphenated, (_, first, dash, second) => this.frequencyCache[first + second] > this.frequencyCache[first + '-' + second] ? first + second : first + dash + second);
 
-        return text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/(?<!(?:[.!?…]["'”’)\]]*|\n))\n(?!\n)/g, ' ').trim();
+        return text.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/[ \t ]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/­[ \t]*\n?/g, '').replace(/([-‐-―])\n(?=[^\n])/g, '$1').replace(/(?<!(?:[.!?…]["'”’)\]]*|\n))\n(?!\n)/g, ' ').trim();
     }
 }
 
