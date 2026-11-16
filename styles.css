@@ -274,14 +274,18 @@ body {
     justify-content: center;
     transition: all 0.3s ease;
 
-    &:not(:disabled):hover {
+    &:not(:disabled, :has(:disabled)):hover {
         background-color: var(--icon-hover-bg);
         transform: scale(1.1);
     }
 
-    &:disabled {
+    &:disabled, &:has(:disabled) {
         opacity: 0.5;
         cursor: not-allowed;
+    }
+
+    input {
+        display: none;
     }
 
     .material-icons {

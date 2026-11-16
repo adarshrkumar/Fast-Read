@@ -3,7 +3,6 @@ const frequencyCache = {};
 let isPlaying = false;
 let intervalId = null;
 let prefetch = null;
-let isAudioEnabled = false;
 let speechToken = 0;
 
 const speedValue = document.getElementById('speedValue');
@@ -257,7 +256,7 @@ const speedSlider = document.getElementById('speedSlider');
 speedSlider.addEventListener('input', () => {
     speedValue.textContent = speedSlider.value;
     audio.playbackRate = parseInt(speedSlider.value) / 200;
-    if (isPlaying && !isAudioEnabled) {
+    if (isPlaying && !audioToggle.checked) {
         stopReading();
         startReading();
     }
@@ -265,9 +264,8 @@ speedSlider.addEventListener('input', () => {
 });
 
 const audioToggle = document.getElementById('audioToggle');
-audioToggle.addEventListener('click', () => {
-    isAudioEnabled = !isAudioEnabled;
-    audioToggle.querySelector('.material-icons').textContent = isAudioEnabled ? 'volume_up' : 'volume_off';
+audioToggle.addEventListener('change', () => {
+    audioToggle.nextElementSibling.textContent = audioToggle.checked ? 'volume_up' : 'volume_off';
 
     if (isPlaying) {
         stopReading();
@@ -396,14 +394,14 @@ if (savedSettings.speed) {
 }
 
 if (savedSettings.isAudioEnabled !== undefined) {
-    isAudioEnabled = savedSettings.isAudioEnabled;
-    audioToggle.querySelector('.material-icons').textContent = isAudioEnabled ? 'volume_up' : 'volume_off';
+    audioToggle.checked = savedSettings.isAudioEnabled;
+    audioToggle.nextElementSibling.textContent = audioToggle.checked ? 'volume_up' : 'volume_off';
 }
 
 function saveSettings() {
     localStorage.setItem('fastReaderSettings', JSON.stringify({
         speed: speedSlider.value,
-        isAudioEnabled: isAudioEnabled,
+        isAudioEnabled: audioToggle.checked,
         darkMode: document.body.classList.contains('dark-mode'),
         voice1: voice1.value,
         voice2: voice2.value
@@ -472,7 +470,7 @@ function togglePlayPause() {
 }
 
 function startReading() {
-    if (isAudioEnabled) {
+    if (audioToggle.checked) {
         speakFrom(textContent.selectionStart);
         return;
     }
