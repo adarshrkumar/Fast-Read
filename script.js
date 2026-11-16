@@ -375,7 +375,7 @@ downloadAudioBtn.addEventListener('click', async () => {
 
         const link = document.createElement('a');
         link.href = URL.createObjectURL(new Blob([view], { type: 'audio/wav' }));
-        link.download = `${currentFileName?.replace(/\.[^.]+$/, '') || 'read-aloud'}.wav`;
+        link.download = `${(fileInput.files[0]?.name ?? lastFile?.name)?.replace(/\.[^.]+$/, '') || 'read-aloud'}.wav`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 60000);
         generationStatus.textContent = 'Done. Download started.';
@@ -417,7 +417,7 @@ function saveFileState() {
     if (!textContent.value) return;
 
     localStorage.setItem('fastReaderLastFile', JSON.stringify({
-        name: currentFileName,
+        name: fileInput.files[0]?.name ?? lastFile?.name,
         text: textContent.value,
         selectionStart: textContent.selectionStart,
         timestamp: Date.now()
