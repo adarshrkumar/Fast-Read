@@ -304,8 +304,15 @@ textContent.addEventListener('click', () => {
         startReading();
     }
 });
-textContent.addEventListener('input', () => {
+textContent.addEventListener('paste', () => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([], `Pasted Content_${new Date().toLocaleString('sv').replace(' ', '_').replaceAll(':', '-')}`));
+    fileInput.files = transfer.files;
+});
+textContent.addEventListener('input', event => {
     startReadingBtn.disabled = textContent.value.trim().length === 0;
+
+    if (event.inputType === 'insertFromPaste') saveFileState();
 
     updateTextareaReadonlyState();
 });
