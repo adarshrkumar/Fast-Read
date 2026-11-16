@@ -4,7 +4,6 @@ let isPlaying = false;
 let intervalId = null;
 let prefetch = null;
 let isAudioEnabled = false;
-let currentFileName = null;
 let speechToken = 0;
 
 const speedValue = document.getElementById('speedValue');
@@ -234,7 +233,6 @@ fileInput.addEventListener('change', async event => {
             .join('\n\n');
 
         if (!text) throw new Error('No text found in file');
-        currentFileName = event.target.files[0].name;
         textContent.value = text;
         textContent.setSelectionRange(0, 0);
         updateDisplay();
@@ -302,7 +300,6 @@ startReadingBtn.addEventListener('click', () => {
     if (!textContent.value.trim()) return;
 
     textContent.value = textContent.value.trim();
-    currentFileName ??= 'Manual Input';
     textContent.setSelectionRange(0, 0);
     updateDisplay();
     updateProgress();
@@ -375,7 +372,7 @@ downloadAudioBtn.addEventListener('click', async () => {
 
         const link = document.createElement('a');
         link.href = URL.createObjectURL(new Blob([view], { type: 'audio/wav' }));
-        link.download = `${(fileInput.files[0]?.name ?? lastFile?.name)?.replace(/\.[^.]+$/, '') || 'read-aloud'}.wav`;
+        link.download = `${(fileInput.files[0]?.name ?? lastFile?.name)?.replace(/\.[^.]+$/, '') || 'Manual Input'}.wav`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 60000);
         generationStatus.textContent = 'Done. Download started.';
@@ -427,7 +424,6 @@ function saveFileState() {
 const lastFile = JSON.parse(localStorage.getItem('fastReaderLastFile') || 'null');
 
 if (lastFile) {
-    currentFileName = lastFile.name;
     textContent.value = lastFile.text;
     textContent.setSelectionRange(lastFile.selectionStart || 0, lastFile.selectionStart || 0);
     updateDisplay();
