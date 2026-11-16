@@ -4,7 +4,7 @@ const audio = new Audio();
 let prefetch = null;
 const frequencyCache = {};
 let isAudioEnabled = false;
-let currentFileName = '';
+let currentFileName = null;
 let speechToken = 0;
 
 const speedValue = document.getElementById('speedValue');
@@ -165,7 +165,12 @@ fileInput.addEventListener('change', async event => {
             } catch {
                 text = decodeBytes(wordDocument.subarray(0x200), 'windows-1252');
             }
-            text = text.replace(/\u0013[^\u0014\u0015]*\u0014/g, '').replace(/[\u0013\u0014\u0015]/g, '').replace(/\u0007/g, '\t').replace(/[\u000B\u000C]/g, '\n').replace(/\u0001|\u0008/g, '');
+            text = text
+                .replace(/\u0013[^\u0014\u0015]*\u0014/g, '')
+                .replace(/[\u0013\u0014\u0015]/g, '')
+                .replace(/\u0007/g, '\t')
+                .replace(/[\u000B\u000C]/g, '\n')
+                .replace(/\u0001|\u0008/g, '');
         }
         else if (ext === 'wri') {
             text = decodeBytes(bytes.subarray(0x80, Math.max(0x80, Math.min(new DataView(buf).getUint32(0x0E, true) || buf.byteLength, buf.byteLength))), 'windows-1252').replace(/\u000C/g, '\n');
@@ -174,7 +179,18 @@ fileInput.addEventListener('change', async event => {
         else if (['pdf', 'doc', 'docx', 'odt'].includes(ext)) throw new Error(`Could not read this ${ext.toUpperCase()} file.`);
         else text = decodeBytes(bytes);
 
-        const lines = text.replace(/\r\n?/g, '\n').replace(/\xAD[ \t]*\n?/g, '').split('\n').map(line => line.replace(/[ \t\xA0]+/g, ' ').replace(/ ! /g, ' ').replace(/ +([,.;:!?)\]])/g, '$1').replace(/([(\[“]) +/g, '$1').trim().replace(/[‘’‚‛]/g, "'").replace(/[“”„‟]/g, '"'));
+        const lines = text
+            .replace(/\r\n?/g, '\n')
+            .replace(/\xAD[ \t]*\n?/g, '')
+            .split('\n')
+            .map(line => line
+                .replace(/[ \t\xA0]+/g, ' ')
+                .replace(/ ! /g, ' ')
+                .replace(/ +([,.;:!?)\]])/g, '$1')
+                .replace(/([(\[“]) +/g, '$1').trim()
+                .replace(/[‘’‚‛]/g, "'")
+                .replace(/[“”„‟]/g, '"')
+            );
         const keys = lines.map(line => line.replace(/\d+/g, '#'));
         const counts = new Map();
         for (const key of keys) counts.set(key, (counts.get(key) || 0) + 1);
@@ -186,25 +202,36 @@ fileInput.addEventListener('change', async event => {
 
         const hyphenated = /(\p{L}+)[ \t]*([-‐-–])[ \t]*\r?\n(\p{L}+)/gu;
         const forms = [...new Set(Array.from(text.matchAll(hyphenated), match => [`${match[1]}${match[3]}`, `${match[1]}-${match[3]}`, match[1], match[3]]).flat())];
-        for (let index = 0; index < forms.length; index += 10) await Promise.all(forms.slice(index, index + 10).map(async form => {
-            if (form in frequencyCache) return;
+        for (let index = 0; index < forms.length; index += 10) await Promise.all(forms.slice(index, index + 10)
+            .map(async form => {
+                if (form in frequencyCache) return;
 
-            try {
-                frequencyCache[form] = (await (await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(`"${form.replace(/-/g, ' ')}"`)}&srlimit=1&srinfo=totalhits&format=json&origin=*`)).json()).query.searchinfo.totalhits;
-            } catch {
-                frequencyCache[form] = 0;
-            }
-        }));
-        text = text.replace(hyphenated, (_, first, dash, second) => frequencyCache[`${first}-${second}`] > frequencyCache[`${first}${second}`] || frequencyCache[`${first}-${second}`] === frequencyCache[`${first}${second}`] && (frequencyCache[first] >= 1000 || /^\p{Lu}+$/u.test(first)) && frequencyCache[second] >= 1000 ? `${first}${dash}${second}` : `${first}${second}`);
-
-        text = text.replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '').replace(/\n{3,}/g, '\n\n').replace(/([-‐-―])\n(?=[^\n])/g, '$1').replace(/(?<![.!?…:]["')\]]*)\n\n(?=\p{Ll})/gu, ' ').replace(/(?<!(?:[.!?…:]["')\]]*|\n))\n(?!\n)/g, ' ').trim();
+                try {
+                    frequencyCache[form] = (await (await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(`"${form.replace(/-/g, ' ')}"`)}&srlimit=1&srinfo=totalhits&format=json&origin=*`)).json()).query.searchinfo.totalhits;
+                } catch {
+                    frequencyCache[form] = 0;
+                }
+            }));
+        text = text
+            .replace(hyphenated, (_, first, dash, second) => frequencyCache[`${first}-${second}`] > frequencyCache[`${first}${second}`] || frequencyCache[`${first}-${second}`] === frequencyCache[`${first}${second}`] && (frequencyCache[first] >= 1000 || /^\p{Lu}+$/u.test(first)) && frequencyCache[second] >= 1000 ? `${first}${dash}${second}` : `${first}${second}`)
+            .replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, '')
+            .replace(/\n{3,}/g, '\n\n')
+            .replace(/([-‐-―])\n(?=[^\n])/g, '$1')
+            .replace(/(?<![.!?…:]["')\]]*)\n\n(?=\p{Ll})/gu, ' ')
+            .replace(/(?<!(?:[.!?…:]["')\]]*|\n))\n(?!\n)/g, ' ')
+            .trim()
+            .replace(/\[(\d+(?:\s*[,–-]\s*\d+)*)\](?=\s*[.!?…](?:\s|$|["')\]])|[ \t]*(?:\n\s*\n|$))/g, '[Citation $1]')
+            .replace(/(?<=[.!?…]["')]?)\[(\d+(?:\s*[,–-]\s*\d+)*)\](?=\s|$)/g, '[Citation $1]');
 
         const bulletPattern = /^[•◦▪▫●○■□‣⁃∙·]\s*/;
         let bullet = 0;
-        text = text.split(/\n{2,}/).map(paragraph => {
-            bullet = bulletPattern.test(paragraph) ? bullet + 1 : 0;
-            return bullet ? paragraph.replace(bulletPattern, `Bullet ${bullet}: `) : paragraph;
-        }).join('\n\n');
+        text = text
+            .split(/\n{2,}/)
+            .map(paragraph => {
+                bullet = bulletPattern.test(paragraph) ? bullet + 1 : 0;
+                return bullet ? paragraph.replace(bulletPattern, `Bullet ${bullet}: `) : paragraph;
+            })
+            .join('\n\n');
 
         if (!text) throw new Error('No text found in file');
         currentFileName = event.target.files[0].name;
@@ -275,7 +302,7 @@ startReadingBtn.addEventListener('click', () => {
     if (!textContent.value.trim()) return;
 
     textContent.value = textContent.value.trim();
-    currentFileName = currentFileName || 'Manual Input';
+    currentFileName ??= 'Manual Input';
     textContent.setSelectionRange(0, 0);
     updateDisplay();
     updateProgress();
@@ -348,7 +375,7 @@ downloadAudioBtn.addEventListener('click', async () => {
 
         const link = document.createElement('a');
         link.href = URL.createObjectURL(new Blob([view], { type: 'audio/wav' }));
-        link.download = `${currentFileName.replace(/\.[^.]+$/, '') || 'read-aloud'}.wav`;
+        link.download = `${currentFileName?.replace(/\.[^.]+$/, '') || 'read-aloud'}.wav`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 60000);
         generationStatus.textContent = 'Done. Download started.';
