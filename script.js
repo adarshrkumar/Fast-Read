@@ -357,10 +357,11 @@ downloadAudioBtn.addEventListener('click', async () => {
         const context = new AudioContext({ sampleRate: sampleRate });
         const chunks = [];
         let offset = textContent.value.search(/\S/);
+        let index = 0;
 
         while (offset !== -1) {
-            const paragraph = getParagraph(offset);
-            chunks.push(Int16Array.from((await context.decodeAudioData(await (await synthesize(paragraph, progress => generationStatus.textContent = `Downloading voice ${Math.round(progress.loaded * 100 / progress.total)}%`)).arrayBuffer())).getChannelData(0), sample => Math.max(-1, Math.min(1, sample)) * 32767), new Int16Array(Math.round(sampleRate * 0.4)));
+            const paragraph = getSentence(offset, index++);
+            chunks.push(Int16Array.from((await context.decodeAudioData(await (await synthesize(paragraph, progress => generationStatus.textContent = `Downloading voice ${Math.round(progress.loaded * 100 / progress.total)}%`)).arrayBuffer())).getChannelData(0), sample => Math.max(-1, Math.min(1, sample)) * 32767), new Int16Array(Math.round(sampleRate * paragraph.pause)));
             const percent = Math.round(paragraph.end / textContent.value.length * 100);
             generationProgress.style.width = `${percent}%`;
             generationStatus.textContent = `Generating audio... ${percent}%`;
@@ -512,26 +513,39 @@ function updateDisplay() {
     if (match) textContent.setSelectionRange(match.index, match.index + match[0].length);
 }
 
-function getParagraph(offset) {
-    const length = textContent.value.slice(offset).search(/\n\s*\n/);
-    const end = length === -1 ? textContent.value.length : offset + length;
+function getSentence(offset, index) {
+    const match = /([.!?\u2026]+["'\u201d\u2019)\]]*)(?=\s|$)|\n\s*\n/.exec(textContent.value.slice(offset));
+    const end = match ? offset + match.index + (match[1] ? match[0].length : 0) : textContent.value.length;
     const gap = textContent.value.slice(end).search(/\S/);
 
     return {
         end,
+        index,
         next: gap === -1 ? -1 : end + gap,
+        pause: gap !== -1 && /\n\s*\n/.test(textContent.value.slice(end, end + gap)) ? 0.4 : 0.15,
         text: textContent.value.slice(offset, end).replace(/\s+/g, ' ').trim(),
-        voice: (textContent.value.slice(0, offset).trimStart().split(/\n\s*\n/).length % 2 === 1 ? voice1 : voice2).value
+        voice: (index % 2 === 0 ? voice1 : voice2).value
     };
+}
+
+function getSentenceIndex(offset) {
+    let index = 0;
+    let position = Math.max(0, textContent.value.search(/\S/));
+    let sentence = getSentence(position, index);
+
+    while (sentence.next !== -1 && sentence.next <= offset) {
+        sentence = getSentence(sentence.next, ++index);
+    }
+    return index;
 }
 
 function synthesize(paragraph, onProgress) {
     return window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress);
 }
 
-async function speakFrom(offset) {
+async function speakFrom(offset, index = getSentenceIndex(offset)) {
     const token = ++speechToken;
-    const paragraph = getParagraph(offset);
+    const paragraph = getSentence(offset, index);
 
     try {
         currentWordDisplay.textContent = 'Generating audio...';
@@ -549,7 +563,7 @@ async function speakFrom(offset) {
             clearInterval(intervalId);
             if (paragraph.next === -1) return playPauseBtn.click();
 
-            speakFrom(paragraph.next);
+            speakFrom(paragraph.next, index + 1);
         };
         await audio.play();
         if (token !== speechToken) return;
@@ -562,7 +576,7 @@ async function speakFrom(offset) {
             updateDisplay();
             updateProgress();
         }, 100);
-        prefetch = paragraph.next === -1 ? null : { offset: paragraph.next, promise: synthesize(getParagraph(paragraph.next)) };
+        prefetch = paragraph.next === -1 ? null : { offset: paragraph.next, promise: synthesize(getSentence(paragraph.next, index + 1)) };
     } catch (error) {
         if (token !== speechToken) return;
         console.error('Error generating audio:', error);
