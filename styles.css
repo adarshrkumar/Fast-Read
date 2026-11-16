@@ -45,6 +45,7 @@ body {
     line-height: 1.6;
     background-color: var(--bg-color);
     min-height: 100vh;
+    margin-block: 1rem;
     display: flex;
     justify-content: center;
     align-items: center;
