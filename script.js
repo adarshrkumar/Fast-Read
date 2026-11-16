@@ -359,8 +359,8 @@ downloadAudioBtn.addEventListener('click', async () => {
         let offset = textContent.value.search(/\S/);
 
         while (offset !== -1) {
-            const paragraph = getParagraph(offset);
-            chunks.push(Int16Array.from((await context.decodeAudioData(await (await synthesize(paragraph, progress => generationStatus.textContent = `Downloading voice ${Math.round(progress.loaded * 100 / progress.total)}%`)).arrayBuffer())).getChannelData(0), sample => Math.max(-1, Math.min(1, sample)) * 32767), new Int16Array(Math.round(sampleRate * 0.4)));
+            const paragraph = getSentence(offset);
+            chunks.push(Int16Array.from((await context.decodeAudioData(await (await synthesize(paragraph, progress => generationStatus.textContent = `Downloading voice ${Math.round(progress.loaded * 100 / progress.total)}%`)).arrayBuffer())).getChannelData(0), sample => Math.max(-1, Math.min(1, sample)) * 32767), new Int16Array(Math.round(sampleRate * (paragraph.next === -1 || /\n\s*\n/.test(textContent.value.slice(paragraph.end, paragraph.next)) ? 0.4 : 0.15))));
             const percent = Math.round(paragraph.end / textContent.value.length * 100);
             generationProgress.style.width = `${percent}%`;
             generationStatus.textContent = `Generating audio... ${percent}%`;
@@ -512,8 +512,8 @@ function updateDisplay() {
     if (match) textContent.setSelectionRange(match.index, match.index + match[0].length);
 }
 
-function getParagraph(offset) {
-    const length = textContent.value.slice(offset).search(/\n\s*\n/);
+function getSentence(offset) {
+    const length = textContent.value.slice(offset).search(/(?<=[.!?\u2026]["'\u201d\u2019)\]]*)(?=\s|$)|\n\s*\n/);
     const end = length === -1 ? textContent.value.length : offset + length;
     const gap = textContent.value.slice(end).search(/\S/);
 
@@ -521,7 +521,7 @@ function getParagraph(offset) {
         end,
         next: gap === -1 ? -1 : end + gap,
         text: textContent.value.slice(offset, end).replace(/\s+/g, ' ').trim(),
-        voice: (textContent.value.slice(0, offset).trimStart().split(/\n\s*\n/).length % 2 === 1 ? voice1 : voice2).value
+        voice: ((textContent.value.slice(0, offset).match(/(?<=[.!?\u2026]["'\u201d\u2019)\]]*)(?=\s|$)|(?<![.!?\u2026]["'\u201d\u2019)\]]*\s*)\n\s*\n/g) || []).length % 2 === 0 ? voice1 : voice2).value
     };
 }
 
@@ -531,7 +531,7 @@ function synthesize(paragraph, onProgress) {
 
 async function speakFrom(offset) {
     const token = ++speechToken;
-    const paragraph = getParagraph(offset);
+    const paragraph = getSentence(offset);
 
     try {
         currentWordDisplay.textContent = 'Generating audio...';
@@ -562,7 +562,7 @@ async function speakFrom(offset) {
             updateDisplay();
             updateProgress();
         }, 100);
-        prefetch = paragraph.next === -1 ? null : { offset: paragraph.next, promise: synthesize(getParagraph(paragraph.next)) };
+        prefetch = paragraph.next === -1 ? null : { offset: paragraph.next, promise: synthesize(getSentence(paragraph.next)) };
     } catch (error) {
         if (token !== speechToken) return;
         console.error('Error generating audio:', error);
