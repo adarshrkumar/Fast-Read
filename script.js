@@ -360,7 +360,7 @@ downloadAudioBtn.addEventListener('click', async () => {
 
         while (offset !== -1) {
             const paragraph = getSentence(offset);
-            chunks.push(Int16Array.from((await context.decodeAudioData(await (await synthesize(paragraph, progress => generationStatus.textContent = `Downloading voice ${Math.round(progress.loaded * 100 / progress.total)}%`)).arrayBuffer())).getChannelData(0), sample => Math.max(-1, Math.min(1, sample)) * 32767), new Int16Array(Math.round(sampleRate * 0.2)));
+            chunks.push(Int16Array.from((await context.decodeAudioData(await (await synthesize(paragraph, progress => generationStatus.textContent = `Downloading voice ${Math.round(progress.loaded * 100 / progress.total)}%`)).arrayBuffer())).getChannelData(0), sample => Math.max(-1, Math.min(1, sample)) * 32767), new Int16Array(Math.round(sampleRate * (paragraph.next === -1 || /\n\s*\n/.test(textContent.value.slice(paragraph.end, paragraph.next)) ? 0.4 : 0.15))));
             const percent = Math.round(paragraph.end / textContent.value.length * 100);
             generationProgress.style.width = `${percent}%`;
             generationStatus.textContent = `Generating audio... ${percent}%`;
