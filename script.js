@@ -1,8 +1,8 @@
+const audio = new Audio();
+const frequencyCache = {};
 let isPlaying = false;
 let intervalId = null;
-const audio = new Audio();
 let prefetch = null;
-const frequencyCache = {};
 let isAudioEnabled = false;
 let currentFileName = null;
 let speechToken = 0;
