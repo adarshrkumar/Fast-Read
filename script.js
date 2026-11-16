@@ -1,6 +1,5 @@
 const audio = new Audio();
 const frequencyCache = {};
-let isPlaying = false;
 let intervalId = null;
 let prefetch = null;
 let speechToken = 0;
@@ -250,13 +249,31 @@ fileInput.addEventListener('change', async event => {
 });
 
 const playPauseBtn = document.getElementById('playPauseBtn');
-playPauseBtn.addEventListener('click', togglePlayPause);
+playPauseBtn.addEventListener('change', () => {
+    if (!/\S/.test(textContent.value)) {
+        playPauseBtn.checked = false;
+        return;
+    }
+
+    playPauseBtn.nextElementSibling.textContent = playPauseBtn.checked ? 'pause' : 'play_arrow';
+
+    if (playPauseBtn.checked) {
+        if (!/\S/.test(textContent.value.slice(textContent.selectionEnd))) {
+            textContent.setSelectionRange(0, 0);
+            updateDisplay();
+        }
+        startReading();
+    }
+    else stopReading();
+
+    updateTextareaReadonlyState();
+});
 
 const speedSlider = document.getElementById('speedSlider');
 speedSlider.addEventListener('input', () => {
     speedValue.textContent = speedSlider.value;
     audio.playbackRate = parseInt(speedSlider.value) / 200;
-    if (isPlaying && !audioToggle.checked) {
+    if (playPauseBtn.checked && !audioToggle.checked) {
         stopReading();
         startReading();
     }
@@ -267,7 +284,7 @@ const audioToggle = document.getElementById('audioToggle');
 audioToggle.addEventListener('change', () => {
     audioToggle.nextElementSibling.textContent = audioToggle.checked ? 'volume_up' : 'volume_off';
 
-    if (isPlaying) {
+    if (playPauseBtn.checked) {
         stopReading();
         startReading();
     }
@@ -282,7 +299,7 @@ textContent.addEventListener('click', () => {
     updateDisplay();
     updateProgress();
     saveFileState();
-    if (isPlaying) {
+    if (playPauseBtn.checked) {
         stopReading();
         startReading();
     }
@@ -306,11 +323,11 @@ startReadingBtn.addEventListener('click', () => {
     downloadAudioBtn.disabled = false;
     saveFileState();
 
-    if (isPlaying) {
+    if (playPauseBtn.checked) {
         stopReading();
         startReading();
     }
-    else togglePlayPause();
+    else playPauseBtn.click();
 });
 
 const voice1 = document.getElementById('voice1');
@@ -451,24 +468,6 @@ function toggleDarkMode(forcedState) {
     saveSettings();
 }
 
-function togglePlayPause() {
-    if (!/\S/.test(textContent.value)) return;
-
-    isPlaying = !isPlaying;
-    playPauseBtn.querySelector('.material-icons').textContent = isPlaying ? 'pause' : 'play_arrow';
-
-    if (isPlaying) {
-        if (!/\S/.test(textContent.value.slice(textContent.selectionEnd))) {
-            textContent.setSelectionRange(0, 0);
-            updateDisplay();
-        }
-        startReading();
-    }
-    else stopReading();
-
-    updateTextareaReadonlyState();
-}
-
 function startReading() {
     if (audioToggle.checked) {
         speakFrom(textContent.selectionStart);
@@ -476,7 +475,7 @@ function startReading() {
     }
 
     intervalId = setInterval(() => {
-        if (!/\S/.test(textContent.value.slice(textContent.selectionEnd))) return togglePlayPause();
+        if (!/\S/.test(textContent.value.slice(textContent.selectionEnd))) return playPauseBtn.click();
 
         textContent.setSelectionRange(textContent.selectionEnd + 1, textContent.selectionEnd + 1);
         updateDisplay();
@@ -541,7 +540,7 @@ async function speakFrom(offset) {
             if (token !== speechToken) return;
 
             clearInterval(intervalId);
-            if (paragraph.next === -1) return togglePlayPause();
+            if (paragraph.next === -1) return playPauseBtn.click();
 
             speakFrom(paragraph.next);
         };
@@ -561,7 +560,7 @@ async function speakFrom(offset) {
         if (token !== speechToken) return;
         console.error('Error generating audio:', error);
         currentWordDisplay.textContent = `Error generating audio: ${error.message || 'unknown error'}`;
-        togglePlayPause();
+        playPauseBtn.click();
     }
 }
 
@@ -603,9 +602,9 @@ function updateProgress() {
 }
 
 function updateTextareaReadonlyState() {
-    textContent.readOnly = isPlaying;
+    textContent.readOnly = playPauseBtn.checked;
 
-    if (isPlaying) {
+    if (playPauseBtn.checked) {
         textContent.style.backgroundColor = 'var(--word-display-bg)';
         textContent.style.cursor = 'not-allowed';
     }
