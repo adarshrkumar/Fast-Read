@@ -571,9 +571,13 @@ window.ort.InferenceSession.create = async model => {
     return sessions.get(key);
 };
 
-function synthesize(paragraph, onProgress) {
-    return window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress).catch(() => window.tts.predict({ text: paragraph.text.replace(/\d+(?:\.\d+)?/g, number => [...number].map(character => character === '.' ? 'point' : digitNames[character]).join(' ')).replace(/(?<!\p{L})'|'(?!\p{L})|[^\p{L}\p{N}\s.,!?'-]/gu, symbol => ` ${symbolNames[symbol] ?? 'symbol'} `).replace(/\s+/g, ' ').trim(), voiceId: paragraph.voice }, onProgress)).catch(error => {
-        throw new Error(`${error?.message ?? error} [voice ${paragraph.voice}, text "${paragraph.text.slice(0, 80)}"]`);
+function synthesize(paragraph, onProgress, attempts = 3) {
+    return Promise.race([window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress), new Promise(resolve => setTimeout(resolve, 90000, null))]).then(blob => blob ?? (attempts > 1 ? synthesize(paragraph, onProgress, attempts - 1) : Promise.reject(new Error(`Timed out waiting for the voice engine [voice ${paragraph.voice}, text "${paragraph.text.slice(0, 80)}"]`))), error => {
+        const spoken = paragraph.text.replace(/\d+(?:\.\d+)?/g, number => [...number].map(character => character === '.' ? 'point' : digitNames[character]).join(' ')).replace(/(?<!\p{L})'|'(?!\p{L})|[^\p{L}\p{N}\s.,!?'-]/gu, symbol => ` ${symbolNames[symbol] ?? 'symbol'} `).replace(/\s+/g, ' ').trim();
+
+        if (spoken === paragraph.text) throw new Error(`${error?.message ?? error} [voice ${paragraph.voice}, text "${paragraph.text.slice(0, 80)}"]`);
+
+        return synthesize({ ...paragraph, text: spoken }, onProgress);
     });
 }
 
