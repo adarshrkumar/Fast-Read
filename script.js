@@ -1,5 +1,26 @@
 const audio = new Audio();
 const frequencyCache = {};
+const symbolNames = {
+    '<': 'less than', '>': 'greater than',
+    '[': 'open bracket', ']': 'close bracket',
+    '(': 'open parenthesis', ')': 'close parenthesis',
+    '{': 'open brace', '}': 'close brace',
+    "'": 'apostrophe', '"': 'quote',
+    ';': 'semicolon', ':': 'colon',
+    '/': 'slash', '\\': 'backslash',
+    '+': 'plus', '=': 'equals',
+    '×': 'times', '÷': 'divided by',
+    '±': 'plus or minus', '∓': 'minus or plus',
+    '&': 'and', '%': 'percent', '#': 'hash', '@': 'at',
+    '*': 'asterisk', '_': 'underscore', '|': 'pipe', '~': 'tilde', '^': 'caret', '`': 'backtick',
+    '$': 'dollar', '€': 'euro', '£': 'pound',
+    '°': 'degrees',
+    '•': 'bullet', '…': 'ellipsis',
+    '—': 'dash', '–': 'dash',
+    '→': 'arrow',
+    '©': 'copyright', '®': 'registered', '™': 'trademark',
+    '§': 'section', '¶': 'paragraph'
+};
 let intervalId = null;
 let prefetch = null;
 let speechToken = 0;
@@ -526,7 +547,7 @@ function getSentence(offset) {
 }
 
 function synthesize(paragraph, onProgress) {
-    return window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress);
+    return window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress).catch(() => window.tts.predict({ text: paragraph.text.replace(/(?<!\p{L})'|'(?!\p{L})|[^\p{L}\p{N}\s.,!?'-]/gu, symbol => ` ${symbolNames[symbol] ?? 'symbol'} `).replace(/\s+/g, ' ').trim(), voiceId: paragraph.voice }, onProgress));
 }
 
 async function speakFrom(offset) {
