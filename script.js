@@ -21,6 +21,8 @@ const symbolNames = {
     '©': 'copyright', '®': 'registered', '™': 'trademark',
     '§': 'section', '¶': 'paragraph'
 };
+const digitNames = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+
 let intervalId = null;
 let prefetch = null;
 let speechToken = 0;
@@ -547,7 +549,7 @@ function getSentence(offset) {
 }
 
 function synthesize(paragraph, onProgress) {
-    return window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress).catch(() => window.tts.predict({ text: paragraph.text.replace(/(?<!\p{L})'|'(?!\p{L})|[^\p{L}\p{N}\s.,!?'-]/gu, symbol => ` ${symbolNames[symbol] ?? 'symbol'} `).replace(/\s+/g, ' ').trim(), voiceId: paragraph.voice }, onProgress));
+    return window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress).catch(() => window.tts.predict({ text: paragraph.text.replace(/\d+(?:\.\d+)?/g, number => [...number].map(character => character === '.' ? 'point' : digitNames[character]).join(' ')).replace(/(?<!\p{L})'|'(?!\p{L})|[^\p{L}\p{N}\s.,!?'-]/gu, symbol => ` ${symbolNames[symbol] ?? 'symbol'} `).replace(/\s+/g, ' ').trim(), voiceId: paragraph.voice }, onProgress));
 }
 
 async function speakFrom(offset) {
