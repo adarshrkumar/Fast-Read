@@ -87,16 +87,8 @@
         import * as tts from 'https://esm.sh/@diffusionstudio/vits-web@1.0.3';
         import * as ort from 'https://esm.sh/onnxruntime-web@1.18.0';
 
-        const sessions = new Map();
-        const create = ort.InferenceSession.create.bind(ort.InferenceSession);
-        ort.InferenceSession.create = async model => {
-            const bytes = new Uint8Array(model);
-            const key = `${bytes.length}:${Array.from({ length: Math.ceil(bytes.length / 997) }, (_, index) => bytes[index * 997]).reduce((hash, value) => Math.imul(hash, 31) + value | 0, 0)}`;
-            if (!sessions.has(key)) sessions.set(key, await create(model));
-            return sessions.get(key);
-        };
-
         window.tts = tts;
+        window.ort = ort;
     </script>
     <script defer src="script.js"></script>
 </body>

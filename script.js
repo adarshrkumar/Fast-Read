@@ -548,6 +548,29 @@ function getSentence(offset) {
     };
 }
 
+const sessions = new Map();
+const createSession = window.ort.InferenceSession.create.bind(window.ort.InferenceSession);
+window.ort.InferenceSession.create = async model => {
+    const bytes = new Uint8Array(model);
+    const key = `${bytes.length}:${Array.from({ length: Math.ceil(bytes.length / 997) }, (_, index) => bytes[index * 997]).reduce((hash, value) => Math.imul(hash, 31) + value | 0, 0)}`;
+    if (!sessions.has(key)) {
+        const session = await createSession(model);
+        const run = session.run.bind(session);
+        session.run = async feeds => {
+            try {
+                return await run(feeds);
+            } catch (error) {
+                const limit = /inclusive range \[-\d+,(\d+)\]/.exec(error?.message ?? String(error));
+                if (!limit) throw error;
+                const ids = BigInt64Array.from(Array.from(feeds.input.data).filter(id => id <= BigInt(limit[1])));
+                return run({ ...feeds, input: new window.ort.Tensor('int64', ids, [1, ids.length]), input_lengths: new window.ort.Tensor('int64', [ids.length]) });
+            }
+        };
+        sessions.set(key, session);
+    }
+    return sessions.get(key);
+};
+
 function synthesize(paragraph, onProgress) {
     return window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress).catch(() => window.tts.predict({ text: paragraph.text.replace(/\d+(?:\.\d+)?/g, number => [...number].map(character => character === '.' ? 'point' : digitNames[character]).join(' ')).replace(/(?<!\p{L})'|'(?!\p{L})|[^\p{L}\p{N}\s.,!?'-]/gu, symbol => ` ${symbolNames[symbol] ?? 'symbol'} `).replace(/\s+/g, ' ').trim(), voiceId: paragraph.voice }, onProgress)).catch(error => {
         throw new Error(`${error?.message ?? error} [voice ${paragraph.voice}, text "${paragraph.text.slice(0, 80)}"]`);
