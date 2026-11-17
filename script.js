@@ -549,7 +549,9 @@ function getSentence(offset) {
 }
 
 function synthesize(paragraph, onProgress) {
-    return window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress).catch(() => window.tts.predict({ text: paragraph.text.replace(/\d+(?:\.\d+)?/g, number => [...number].map(character => character === '.' ? 'point' : digitNames[character]).join(' ')).replace(/(?<!\p{L})'|'(?!\p{L})|[^\p{L}\p{N}\s.,!?'-]/gu, symbol => ` ${symbolNames[symbol] ?? 'symbol'} `).replace(/\s+/g, ' ').trim(), voiceId: paragraph.voice }, onProgress));
+    return window.tts.predict({ text: paragraph.text, voiceId: paragraph.voice }, onProgress).catch(() => window.tts.predict({ text: paragraph.text.replace(/\d+(?:\.\d+)?/g, number => [...number].map(character => character === '.' ? 'point' : digitNames[character]).join(' ')).replace(/(?<!\p{L})'|'(?!\p{L})|[^\p{L}\p{N}\s.,!?'-]/gu, symbol => ` ${symbolNames[symbol] ?? 'symbol'} `).replace(/\s+/g, ' ').trim(), voiceId: paragraph.voice }, onProgress)).catch(error => {
+        throw new Error(`${error?.message ?? error} [voice ${paragraph.voice}, text "${paragraph.text.slice(0, 80)}"]`);
+    });
 }
 
 async function speakFrom(offset) {
